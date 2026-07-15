@@ -188,13 +188,27 @@ export function Table() {
           const changedClass = changed && p !== game.firstHand ? 'ring-2 ring-blue-500/50' : ''
           return (
             <div key={p} className={`bg-slate-800 rounded-2xl p-5 ${playerColor(p)} ${changedClass}`}>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 gap-2">
                 <div className="text-xl font-bold truncate">{game.players[p]}</div>
-                {p === game.firstHand && (
-                  <span className="text-xs bg-yellow-500 text-slate-900 px-2 py-1 rounded font-semibold">
-                    1 РУКА
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-2xl font-extrabold ${
+                      settlement.net[p] > 0
+                        ? 'text-green-400'
+                        : settlement.net[p] < 0
+                          ? 'text-red-400'
+                          : 'text-slate-400'
+                    }`}
+                  >
+                    {settlement.net[p] > 0 ? '+' : ''}
+                    {settlement.net[p]}
                   </span>
-                )}
+                  {p === game.firstHand && (
+                    <span className="text-xs bg-yellow-500 text-slate-900 px-2 py-1 rounded font-semibold">
+                      1 РУКА
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2 mb-3">
@@ -235,23 +249,6 @@ export function Table() {
                 ))}
               </div>
 
-              <div className="border-t border-slate-700 mt-2 pt-2">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-xs text-slate-500">Итог (висты)</span>
-                  <span
-                    className={`text-lg font-bold ${
-                      settlement.net[p] > 0
-                        ? 'text-green-400'
-                        : settlement.net[p] < 0
-                          ? 'text-red-400'
-                          : 'text-slate-400'
-                    }`}
-                  >
-                    {settlement.net[p] > 0 ? '+' : ''}
-                    {settlement.net[p]}
-                  </span>
-                </div>
-              </div>
             </div>
           )
         })}
