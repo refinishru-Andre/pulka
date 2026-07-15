@@ -79,15 +79,28 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
         delta.whists.push({ from: v, to: player, amount: myTricks * VIST_PER_TRICK[level] })
       }
     })
-    // Индивидуальная норма = обязательство пары / 2. Штраф тому, кто взял меньше нормы.
-    const dutyPerPlayer = duty / 2
-    activeVisters.forEach((v) => {
-      const myTricks = deal.vistersTricks[v]
-      if (myTricks < dutyPerPlayer) {
-        const myShort = dutyPerPlayer - myTricks
-        delta.mount[v] += Math.round(myShort * VISTER_PENALTY_PER_MISS[level])
+    // Штраф за недобор — «пол взятки не считается».
+    // Норма пары ≥ 2 (6-я, 7-я): делится нацело, каждый должен взять duty/2. Штраф тому, кто взял меньше своей нормы.
+    // Норма пары = 1 (8-я, 9-я): пара должна взять 1. Если пара не взяла — штраф каждому, кто лично взял 0, на 1 недобранную взятку.
+    if (vTricksTotal < duty) {
+      if (duty >= 2) {
+        const dutyPerPlayer = duty / 2
+        activeVisters.forEach((v) => {
+          const myTricks = deal.vistersTricks[v]
+          if (myTricks < dutyPerPlayer) {
+            const myShort = dutyPerPlayer - myTricks
+            delta.mount[v] += myShort * VISTER_PENALTY_PER_MISS[level]
+          }
+        })
+      } else {
+        // duty = 1 — каждый вистующий, взявший 0, платит за 1 недобранную полностью
+        activeVisters.forEach((v) => {
+          if (deal.vistersTricks[v] === 0) {
+            delta.mount[v] += VISTER_PENALTY_PER_MISS[level]
+          }
+        })
       }
-    })
+    }
   }
 
   if (success) {
