@@ -129,6 +129,29 @@ describe('calcDeal — Игра сыграна', () => {
     expect(delta.mount.B).toBe(0)
   })
 
+  it('6♣: оба вистуют, взяли по 1 — каждый штрафуется на 2 (недобрал 1 личный)', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'A',
+      contract: { kind: 'game', level: 6, suit: 'C' },
+      playerTricks: 8,
+      vistersTricks: { A: 0, B: 1, C: 1 },
+      vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(2)
+    // Каждый взял 1 при норме 2 → недобрал 1 → штраф 2 в гору обоим
+    expect(delta.mount.B).toBe(2)
+    expect(delta.mount.C).toBe(2)
+    // Виста: каждый за 1 = 4 на A
+    const bToA = delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount
+    const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
+    expect(bToA).toBe(4)
+    expect(cToA).toBe(4)
+  })
+
   it('6♣: оба вистуют, взяли 1+2 — индивидуальная норма (норма 2 каждому)', () => {
     const deal: Deal = {
       type: 'game',
