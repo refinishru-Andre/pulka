@@ -28,7 +28,7 @@ function initState(): GameState {
 }
 
 describe('calcDeal — Игра сыграна', () => {
-  it('7♠ сыграна ровно, оба вистовали, взяли по 1', () => {
+  it('7♠ сыграна ровно, оба вистовали, взяли 1+2 — жлобский, каждый за свои', () => {
     const deal: Deal = {
       type: 'game',
       dealer: 'C',
@@ -42,11 +42,37 @@ describe('calcDeal — Игра сыграна', () => {
     const delta = calcDeal(deal)
     expect(delta.pool.C).toBe(4) // сыгранная 7 = 4 в пулю
     expect(delta.mount).toEqual({ A: 0, B: 0, C: 0 })
-    // Вистующие взяли 3 взятки на 7-й = 3 × 8 / 2 = 12 каждому
+    // A за 1 взятку = 1 × 8 = 8; B за 2 взятки = 2 × 8 = 16
     const aToC = delta.whists.find((w) => w.from === 'A' && w.to === 'C')?.amount
     const bToC = delta.whists.find((w) => w.from === 'B' && w.to === 'C')?.amount
-    expect(aToC).toBe(12)
-    expect(bToC).toBe(12)
+    expect(aToC).toBe(8)
+    expect(bToC).toBe(16)
+  })
+
+  it('6♠ (Сталинград): А играл, О пасовал, Д вистовал, взял 3 — жлобский', () => {
+    // Живой пример Андрея: А играл 6, взял 7, О пасовал, Д взял 3
+    // Но берём 6♣ чтобы не путать со Сталинградом
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'A',
+      contract: { kind: 'game', level: 6, suit: 'C' }, // не Сталинград
+      playerTricks: 7,
+      vistersTricks: { A: 0, B: 0, C: 3 },
+      vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(2) // сыграл 6 (даже с запасом)
+    // Пара взяла 3 при обязательстве 4 → штраф пары 1×2=2 на активных
+    // Активных = C (один). Значит гора C = 2.
+    expect(delta.mount.C).toBe(2)
+    expect(delta.mount.B).toBe(0)
+    // Висты: только активный C пишет за СВОИ 3 взятки = 3 × 4 = 12 на A
+    const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
+    const bToA = delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount
+    expect(cToA).toBe(12)
+    expect(bToA).toBeUndefined() // B пасовал — не пишет
   })
 
   it('9♥ сыграна с запасом (10 взяток), оба вистовали, взяли по 0', () => {
@@ -82,15 +108,14 @@ describe('calcDeal — Ремиз играющего', () => {
     const delta = calcDeal(deal)
     expect(delta.mount.A).toBe(4) // недобрал 1 × 4 = 4 в гору
     expect(delta.pool.A).toBe(0)
-    // Вистующие взяли 5 на 6-й = 5 × 4 / 2 = 10 каждому + консоляция 1 (недобор 1)
+    // B за 2 взятки × 4 = 8; C за 3 × 4 = 12. Консоляция 1 × 4 = 4 обоим
     const bToA = delta.whists.filter((w) => w.from === 'B' && w.to === 'A').reduce((s, w) => s + w.amount, 0)
     const cToA = delta.whists.filter((w) => w.from === 'C' && w.to === 'A').reduce((s, w) => s + w.amount, 0)
-    // 10 за взятки + консоляция 1 × 4 = 4 → всего 14 каждому
-    expect(bToA).toBe(14)
-    expect(cToA).toBe(14)
+    expect(bToA).toBe(12) // 8 + 4
+    expect(cToA).toBe(16) // 12 + 4
   })
 
-  it('9♠ ремиз без 2, оба вистовали, взяли по 1 — с консоляцией', () => {
+  it('9♠ ремиз без 2, оба вистовали, взяли 1+2 — жлобский + консоляция', () => {
     const deal: Deal = {
       type: 'game',
       dealer: 'A',
@@ -103,17 +128,16 @@ describe('calcDeal — Ремиз играющего', () => {
     }
     const delta = calcDeal(deal)
     expect(delta.mount.C).toBe(2 * 16) // недобрал 2 × 16 = 32
-    // Вистующие взяли 3 на 9-й = 3 × 16 / 2 = 24 каждому + консоляция 2
+    // A за 1 = 16, B за 2 = 32. Консоляция 2 × 16 = 32 обоим
     const aToC = delta.whists.filter((w) => w.from === 'A' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
     const bToC = delta.whists.filter((w) => w.from === 'B' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
-    // 24 за взятки + консоляция 2 × 16 = 32 → всего 56 каждому
-    expect(aToC).toBe(56)
-    expect(bToC).toBe(56)
+    expect(aToC).toBe(48) // 16 + 32
+    expect(bToC).toBe(64) // 32 + 32
   })
 })
 
 describe('calcDeal — Сталинград (6♠)', () => {
-  it('6♠: даже если оба «пасовали», висты им пишутся автоматически (Сталинград)', () => {
+  it('6♠: оба принудительно вистуют, ремиз — жлобский за свои + консоляция', () => {
     const deal: Deal = {
       type: 'game',
       dealer: 'A',
@@ -122,15 +146,15 @@ describe('calcDeal — Сталинград (6♠)', () => {
       contract: { kind: 'game', level: 6, suit: 'S' },
       playerTricks: 5,
       vistersTricks: { A: 3, B: 2, C: 0 },
-      vistDecisions: { A: 'pass', B: 'pass', C: 'vist' }, // оба пас, но 6♠ = Сталинград
+      vistDecisions: { A: 'pass', B: 'pass', C: 'vist' }, // оба «пас», но 6♠ → форс вист
     }
     const delta = calcDeal(deal)
-    expect(delta.mount.C).toBe(4) // ремиз без 1 × 4 = 4 в гору
-    // Вистующие взяли 5 = 5 × 4 / 2 = 10 каждому + консоляция 1 × 4 = 4 → 14 каждому
+    expect(delta.mount.C).toBe(4) // ремиз без 1
+    // A за 3 = 12; B за 2 = 8. Консоляция 1×4=4 обоим (оба сталингр. считаются активными)
     const aToC = delta.whists.filter((w) => w.from === 'A' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
     const bToC = delta.whists.filter((w) => w.from === 'B' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
-    expect(aToC).toBe(14)
-    expect(bToC).toBe(14)
+    expect(aToC).toBe(16) // 12 + 4
+    expect(bToC).toBe(12) // 8 + 4
   })
 })
 

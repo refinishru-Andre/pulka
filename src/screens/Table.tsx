@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGameStore } from '../store/game'
-import { settle, minBidFor } from '../engine'
+import { settle, minBidFor, calcDeal } from '../engine'
 import { PLAYERS } from '../engine/types'
 import type { PlayerId } from '../engine/types'
 import { DealForm } from './DealForm'
@@ -22,9 +22,46 @@ export function Table() {
   const settlement = settle(game)
   const minBid = minBidFor(game.raspasState)
 
+  // Дельта от последней сдачи — для подсветки изменений
+  const lastDeal = game.deals[game.deals.length - 1]
+  const lastDelta = lastDeal ? calcDeal(lastDeal) : null
+  // whists суммируем по (from,to) — может быть несколько записей (например висты + консоляция)
+  const lastWhistDelta: Record<PlayerId, Record<PlayerId, number>> = {
+    A: { A: 0, B: 0, C: 0 },
+    B: { A: 0, B: 0, C: 0 },
+    C: { A: 0, B: 0, C: 0 },
+  }
+  if (lastDelta) {
+    lastDelta.whists.forEach((w) => {
+      lastWhistDelta[w.from][w.to] += w.amount
+    })
+  }
+  const playerHasChanges = (p: PlayerId): boolean => {
+    if (!lastDelta) return false
+    if (lastDelta.pool[p] !== 0 || lastDelta.mount[p] !== 0) return true
+    if (PLAYERS.some((o) => lastWhistDelta[p][o] !== 0 || lastWhistDelta[o][p] !== 0)) return true
+    return false
+  }
+
   const playerColor = (p: PlayerId) => {
     if (p === game.firstHand) return 'ring-4 ring-yellow-500'
     return ''
+  }
+
+  // Компонент для показа дельты
+  const Delta = ({ value }: { value: number }) => {
+    if (value === 0) return null
+    const positive = value > 0
+    return (
+      <span
+        className={`ml-2 text-sm font-bold px-1.5 py-0.5 rounded ${
+          positive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+        }`}
+      >
+        {positive ? '+' : ''}
+        {value}
+      </span>
+    )
   }
 
   return (
@@ -91,8 +128,12 @@ export function Table() {
         {PLAYERS.map((p) => {
           const closed = game.pool[p] >= game.poolLimit
           const progress = Math.min(100, (game.pool[p] / game.poolLimit) * 100)
+          const changed = playerHasChanges(p)
+          const poolD = lastDelta?.pool[p] ?? 0
+          const mountD = lastDelta?.mount[p] ?? 0
+          const changedClass = changed && p !== game.firstHand ? 'ring-2 ring-blue-500/50' : ''
           return (
-            <div key={p} className={`bg-slate-800 rounded-2xl p-5 ${playerColor(p)}`}>
+            <div key={p} className={`bg-slate-800 rounded-2xl p-5 ${playerColor(p)} ${changedClass}`}>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xl font-bold truncate">{game.players[p]}</div>
                 {p === game.firstHand && (
@@ -108,6 +149,7 @@ export function Table() {
                   <span className="text-2xl font-bold text-pool">
                     {game.pool[p]}
                     <span className="text-sm text-slate-500 ml-1">/ {game.poolLimit}</span>
+                    <Delta value={poolD} />
                   </span>
                 </div>
                 <div className="h-2 bg-slate-900 rounded-full overflow-hidden">
@@ -118,17 +160,23 @@ export function Table() {
                 </div>
               </div>
 
-              <div className="flex justify-between mb-1">
+              <div className="flex justify-between items-baseline mb-1">
                 <span className="text-sm text-slate-400">Гора</span>
-                <span className="text-xl font-bold text-mount">{game.mount[p]}</span>
+                <span className="text-xl font-bold text-mount">
+                  {game.mount[p]}
+                  <Delta value={mountD} />
+                </span>
               </div>
 
               <div className="border-t border-slate-700 mt-3 pt-2">
                 <div className="text-xs text-slate-500 mb-1">Висты на кого написал</div>
                 {PLAYERS.filter((o) => o !== p).map((o) => (
-                  <div key={o} className="flex justify-between text-sm">
+                  <div key={o} className="flex justify-between items-baseline text-sm">
                     <span className="text-slate-400">→ {game.players[o]}</span>
-                    <span className="text-whist">{game.whists[p][o]}</span>
+                    <span className="text-whist">
+                      {game.whists[p][o]}
+                      <Delta value={lastWhistDelta[p][o]} />
+                    </span>
                   </div>
                 ))}
               </div>
@@ -154,6 +202,27 @@ export function Table() {
           )
         })}
       </div>
+
+      {/* Информация о последней сдаче */}
+      {lastDeal && (
+        <div className="mb-4 px-4 py-2 bg-slate-800/50 rounded-lg text-xs text-slate-400 text-center">
+          Последняя сдача:{' '}
+          {lastDeal.type === 'game' &&
+            lastDeal.contract.kind === 'game' &&
+            `${game.players[lastDeal.player]} играл ${lastDeal.contract.level}${
+              { S: '♠', C: '♣', D: '♦', H: '♥', NT: 'БК' }[lastDeal.contract.suit]
+            }, взял ${lastDeal.playerTricks}`}
+          {lastDeal.type === 'misere' &&
+            `${game.players[lastDeal.player]} мизер${lastDeal.blind ? ' б/п' : ''}, поймали ${lastDeal.playerTricks}`}
+          {lastDeal.type === 'raspas' &&
+            `распас ${lastDeal.level === 1 ? '' : lastDeal.level === 2 ? '2-й' : '8-мерный'}: ${PLAYERS.map((p) => `${game.players[p].slice(0, 3)}=${lastDeal.tricks[p]}`).join(', ')}`}
+          {lastDeal.type === 'giveup' &&
+            lastDeal.contract.kind === 'game' &&
+            `${game.players[lastDeal.player]} ушёл без 3 на ${lastDeal.contract.level}${
+              { S: '♠', C: '♣', D: '♦', H: '♥', NT: 'БК' }[lastDeal.contract.suit]
+            }`}
+        </div>
+      )}
 
       {/* Попарные долги */}
       {settlement.pairwise.length > 0 && (

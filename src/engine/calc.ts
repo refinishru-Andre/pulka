@@ -59,62 +59,35 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
   // Играющий сыграл?
   const success = playerTricks >= level
 
+  // Висты за фактические взятки — «жлобский» вариант Андрея: пишет ТОЛЬКО активный
+  // вистующий за свои личные взятки (пасовавший не пишет ничего, даже если взял по факту).
+  activeVisters.forEach((v) => {
+    const myTricks = deal.vistersTricks[v]
+    if (myTricks > 0) {
+      delta.whists.push({ from: v, to: player, amount: myTricks * VIST_PER_TRICK[level] })
+    }
+  })
+
+  // Штраф за недобор вистующих (полуответственный вист) — только на активных
+  const duty = VISTERS_DUTY[level]
+  if (activeVisters.length > 0 && vTricksTotal < duty) {
+    const shortfall = duty - vTricksTotal
+    const penaltyTotal = shortfall * VISTER_PENALTY_PER_MISS[level]
+    const perActive = Math.round(penaltyTotal / activeVisters.length)
+    activeVisters.forEach((v) => {
+      delta.mount[v] += perActive
+    })
+  }
+
   if (success) {
     // Плюс в пулю играющему
     delta.pool[player] += POOL_COST[level]
-
-    // Висты вистующим за фактические взятки — джентльменский, поровну между обоими
-    if (vTricksTotal > 0 && activeVisters.length > 0) {
-      // Проверка на «полвиста-пас» — тогда все висты идут только полвистовому
-      const halfPlayer = vs.find((v) => effectiveDecisions[v] === 'half')
-      const passPlayer = vs.find((v) => effectiveDecisions[v] === 'pass')
-      if (halfPlayer && passPlayer) {
-        // Все висты полвистовому
-        const amt = vTricksTotal * VIST_PER_TRICK[level]
-        if (amt > 0) delta.whists.push({ from: halfPlayer, to: player, amount: amt })
-      } else {
-        // Джентльменский: делим между обоими вистующими поровну
-        const amt = vTricksTotal * VIST_PER_TRICK[level]
-        const perPlayer = Math.round(amt / 2)
-        vs.forEach((v) => {
-          if (perPlayer > 0) delta.whists.push({ from: v, to: player, amount: perPlayer })
-        })
-      }
-    }
-
-    // Проверка на недобор вистующих (полуответственный вист)
-    const duty = VISTERS_DUTY[level]
-    if (activeVisters.length > 0 && vTricksTotal < duty) {
-      const shortfall = duty - vTricksTotal
-      const penaltyTotal = shortfall * VISTER_PENALTY_PER_MISS[level]
-      // Делим штраф между активно вистующими поровну (полуответственный)
-      const perActive = Math.round(penaltyTotal / activeVisters.length)
-      activeVisters.forEach((v) => {
-        delta.mount[v] += perActive
-      })
-    }
   } else {
     // Ремиз играющего — недобор × штраф в гору
     const shortfall = level - playerTricks
     delta.mount[player] += shortfall * MOUNT_PENALTY[level]
 
-    // Висты вистующим за фактические взятки — джентльменский, делим между обоими
-    if (vTricksTotal > 0) {
-      const halfPlayer = vs.find((v) => effectiveDecisions[v] === 'half')
-      const passPlayer = vs.find((v) => effectiveDecisions[v] === 'pass')
-      if (halfPlayer && passPlayer) {
-        const amt = vTricksTotal * VIST_PER_TRICK[level]
-        if (amt > 0) delta.whists.push({ from: halfPlayer, to: player, amount: amt })
-      } else {
-        const amt = vTricksTotal * VIST_PER_TRICK[level]
-        const perPlayer = Math.round(amt / 2)
-        vs.forEach((v) => {
-          if (perPlayer > 0) delta.whists.push({ from: v, to: player, amount: perPlayer })
-        })
-      }
-    }
-    // Консоляция при ремизе играющего: каждому вистующему (в т.ч. пасовавшему)
-    // добавляется по (число_недобранных × стоимость_виста_игры) вистов
+    // Консоляция — ОБОИМ (вистующему и пасовавшему), по (недобор × стоимость виста игры)
     const consolation = shortfall * VIST_PER_TRICK[level]
     if (consolation > 0) {
       vs.forEach((v) => {
