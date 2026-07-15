@@ -134,7 +134,7 @@ describe('calcDeal — Игра сыграна', () => {
     expect(delta.mount.C).toBe(0)
   })
 
-  it('9♥ сыграна с запасом (10 взяток), оба вистовали, взяли по 0', () => {
+  it('9♥ сыграна с запасом (10 взяток), оба вистовали, взяли по 0 — штраф 4 каждому', () => {
     const deal: Deal = {
       type: 'game',
       dealer: 'A',
@@ -146,9 +146,10 @@ describe('calcDeal — Игра сыграна', () => {
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const delta = calcDeal(deal)
-    expect(delta.pool.A).toBe(8) // сыгранная 9 = 8 в пулю
-    expect(delta.mount).toEqual({ A: 0, B: 0, C: 0 })
-    expect(delta.whists).toHaveLength(0) // вистующие ничего не взяли
+    expect(delta.pool.A).toBe(8) // сыгранная 9
+    // Норма пары 1, взято 0 → каждый недобрал 0.5, штраф 0.5×8=4
+    expect(delta.mount.B).toBe(4)
+    expect(delta.mount.C).toBe(4)
   })
 })
 
