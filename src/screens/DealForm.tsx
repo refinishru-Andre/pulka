@@ -36,7 +36,6 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
   })
 
   const [misPlayer, setMisPlayer] = useState<PlayerId>('A')
-  const [misBlind, setMisBlind] = useState(false)
   const [misTricks, setMisTricks] = useState(0)
 
   const [raspasTricks, setRaspasTricks] = useState<Record<PlayerId, number>>({
@@ -90,7 +89,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
           dealer: prevClockwise(game.firstHand),
           firstHand: game.firstHand,
           player: misPlayer,
-          blind: misBlind,
+          blind: false, // тип мизера не влияет на расчёт
           playerTricks: misTricks,
         }),
       }
@@ -194,8 +193,6 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
             <MisereFormFields
               misPlayer={misPlayer}
               setMisPlayer={setMisPlayer}
-              misBlind={misBlind}
-              setMisBlind={setMisBlind}
               misTricks={misTricks}
               setMisTricks={setMisTricks}
             />
@@ -455,13 +452,11 @@ function GameFormFields(props: {
 function MisereFormFields(props: {
   misPlayer: PlayerId
   setMisPlayer: (p: PlayerId) => void
-  misBlind: boolean
-  setMisBlind: (b: boolean) => void
   misTricks: number
   setMisTricks: (n: number) => void
 }) {
   const game = useGameStore((s) => s.game)!
-  const { misPlayer, setMisPlayer, misBlind, setMisBlind, misTricks, setMisTricks } = props
+  const { misPlayer, setMisPlayer, misTricks, setMisTricks } = props
 
   return (
     <div className="space-y-3">
@@ -479,28 +474,6 @@ function MisereFormFields(props: {
               {game.players[p]}
             </button>
           ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="text-xs text-slate-400 mb-1">Тип</div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setMisBlind(false)}
-            className={`py-2 rounded-lg font-semibold ${
-              !misBlind ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            Обычный мизер
-          </button>
-          <button
-            onClick={() => setMisBlind(true)}
-            className={`py-2 rounded-lg font-semibold ${
-              misBlind ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
-            }`}
-          >
-            Без прикупа
-          </button>
         </div>
       </div>
 
