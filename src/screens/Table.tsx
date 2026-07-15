@@ -116,8 +116,24 @@ export function Table() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">Пулька</h1>
-          <div className="text-sm text-slate-400">
-            Пуля до {game.poolLimit} · сдач сыграно: {game.deals.length}
+          <div className="text-sm text-slate-400 flex items-center gap-3 flex-wrap">
+            <span>Пуля до {game.poolLimit}</span>
+            <span>·</span>
+            <span>сдач сыграно: {game.deals.length}</span>
+            <span>·</span>
+            {(() => {
+              const sumPool = PLAYERS.reduce((s, p) => s + game.pool[p], 0)
+              const inGame = game.poolLimit * PLAYERS.length - sumPool
+              if (inGame <= 0) {
+                return <span className="font-bold text-green-400">Партия окончена</span>
+              }
+              const critical = inGame <= 5
+              return (
+                <span className={critical ? 'font-bold text-red-400 text-base' : ''}>
+                  в игре: {inGame}
+                </span>
+              )
+            })()}
           </div>
         </div>
         <div className="flex gap-2">
