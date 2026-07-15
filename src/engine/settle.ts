@@ -6,6 +6,8 @@ import { PLAYERS } from './types'
 import { POOL_TO_VISTS, MOUNT_TO_VISTS } from './rules'
 
 // Вычислить net каждого игрока
+// Семантика whists[i][j]: «i получает от j эти висты» (в свою пользу).
+// В классической пульке: игрок пишет висты в своё поле «→ соперник» — это ЕГО плюс.
 export function calcNet(state: GameState): Record<PlayerId, number> {
   const avgPool = PLAYERS.reduce((s, p) => s + state.pool[p], 0) / PLAYERS.length
   const avgMount = PLAYERS.reduce((s, p) => s + state.mount[p], 0) / PLAYERS.length
@@ -13,9 +15,11 @@ export function calcNet(state: GameState): Record<PlayerId, number> {
   const net: Record<PlayerId, number> = { A: 0, B: 0, C: 0 }
   PLAYERS.forEach((p) => {
     const own = (state.pool[p] - avgPool) * POOL_TO_VISTS - (state.mount[p] - avgMount) * MOUNT_TO_VISTS
-    const received = PLAYERS.reduce((s, other) => (other === p ? s : s + (state.whists[other]?.[p] ?? 0)), 0)
-    const given = PLAYERS.reduce((s, other) => (other === p ? s : s + (state.whists[p]?.[other] ?? 0)), 0)
-    net[p] = own + received - given
+    // written = сколько p написал на других = сколько p получает (плюс для p)
+    const written = PLAYERS.reduce((s, other) => (other === p ? s : s + (state.whists[p]?.[other] ?? 0)), 0)
+    // owed = сколько на p написали = сколько p должен (минус для p)
+    const owed = PLAYERS.reduce((s, other) => (other === p ? s : s + (state.whists[other]?.[p] ?? 0)), 0)
+    net[p] = own + written - owed
   })
   return net
 }

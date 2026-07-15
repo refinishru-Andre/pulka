@@ -44,7 +44,9 @@ export function calcDealFull(state: GameState, deal: Deal): DealDelta {
         const transfer = Math.min(excess, room)
         delta.pool[next] += transfer
         pool[next] += transfer
-        delta.whists.push({ from: next, to: p, amount: transfer * POOL_TRANSFER_VISTS_PER_POINT })
+        // Правило: передающий (p) получает висты от получателя (next).
+        // Значит p пишет в свою пользу висты на next.
+        delta.whists.push({ from: p, to: next, amount: transfer * POOL_TRANSFER_VISTS_PER_POINT })
         excess -= transfer
       }
       next = nextClockwise(next)
