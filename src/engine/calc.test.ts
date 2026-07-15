@@ -469,6 +469,54 @@ describe('8-мерные распасы: счётчик и полный круг
   })
 })
 
+describe('Переполнение пули (передача по часовой)', () => {
+  it('A набрал 12 при пуле 11 → 1 передан Д, Д пишет 10 вистов на A', async () => {
+    // Импортируем applyDeal динамически
+    const { applyDeal } = await import('./index')
+    const state = initState()
+    state.poolLimit = 11
+    state.pool = { A: 10, B: 0, C: 0 } // A уже 10
+    // Играет A шестерную с запасом → пуля +2 → 12
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6, suit: 'C' },
+      playerTricks: 7,
+      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistDecisions: { A: 'vist', B: 'pass', C: 'pass' }, // все пас → «на своих»
+    }
+    const newState = applyDeal(state, deal)
+    expect(newState.pool.A).toBe(11) // закрыл пулю
+    expect(newState.pool.B).toBe(1) // получил 1 в пулю (B = следующий по часовой от A)
+    expect(newState.whists.B.A).toBe(10) // B пишет 10 вистов на A за 1 очко
+  })
+
+  it('A переполнил на 2, B уже закрыт — 2 очка передаются C через B', async () => {
+    const { applyDeal } = await import('./index')
+    const state = initState()
+    state.poolLimit = 11
+    state.pool = { A: 9, B: 11, C: 5 } // A 9, B закрыт, C 5
+    // A играет девятерную и сыграл → пуля +8 → 17 (переполнение 6)
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 9, suit: 'H' },
+      playerTricks: 9,
+      vistersTricks: { A: 0, B: 0, C: 1 },
+      vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
+    }
+    const newState = applyDeal(state, deal)
+    expect(newState.pool.A).toBe(11) // A закрыл
+    expect(newState.pool.B).toBe(11) // B был закрыт — не растёт
+    expect(newState.pool.C).toBe(11) // C получил 6, но макс 11 → +6 = 11 (было 5)
+    expect(newState.whists.C.A).toBeGreaterThanOrEqual(60) // C пишет 60 вистов на A (6 очков × 10)
+  })
+})
+
 describe('settle — финальный расчёт', () => {
   it('сумма net всех игроков = 0', () => {
     const state = initState()
