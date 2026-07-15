@@ -64,11 +64,12 @@ export const useGameStore = create<Store>()(
       name: 'pulka-game-v1',
       storage: createJSONStorage(() => localStorage),
       version: CALC_VERSION,
-      // При смене версии — пересчитываем всю игру из истории deals[]
-      migrate: (persisted: unknown) => {
-        const state = persisted as { game: GameState | null }
-        if (!state?.game || state.game.deals.length === 0) return state
-        // Replay всех сдач с чистого состояния
+      // При КАЖДОЙ загрузке пересчитываем состояние из истории deals[] — deals
+      // это единственный источник истины, pool/mount/whists — кеш.
+      // Это гарантирует правильные числа даже при изменениях движка расчёта.
+      onRehydrateStorage: () => (state) => {
+        if (!state?.game || state.game.deals.length === 0) return
+        const deals = state.game.deals
         const initial: GameState = {
           ...state.game,
           pool: { A: 0, B: 0, C: 0 },
@@ -78,13 +79,12 @@ export const useGameStore = create<Store>()(
             B: { A: 0, B: 0, C: 0 },
             C: { A: 0, B: 0, C: 0 },
           },
-          firstHand: state.game.deals[0].firstHand,
+          firstHand: deals[0].firstHand,
           raspasState: 'normal',
           eightRaspasCounter: { A: 0, B: 0, C: 0 },
           deals: [],
         }
-        const replayed = state.game.deals.reduce(applyDeal, initial)
-        return { game: replayed }
+        state.game = deals.reduce(applyDeal, initial)
       },
     },
   ),
