@@ -68,7 +68,7 @@ describe('calcDeal — Игра сыграна', () => {
 })
 
 describe('calcDeal — Ремиз играющего', () => {
-  it('6♣ ремиз без 1, оба вистовали, взяли 5 в паре', () => {
+  it('6♣ ремиз без 1, оба вистовали, взяли 5 в паре — с консоляцией', () => {
     const deal: Deal = {
       type: 'game',
       dealer: 'A',
@@ -82,14 +82,15 @@ describe('calcDeal — Ремиз играющего', () => {
     const delta = calcDeal(deal)
     expect(delta.mount.A).toBe(4) // недобрал 1 × 4 = 4 в гору
     expect(delta.pool.A).toBe(0)
-    // Вистующие взяли 5 на 6-й = 5 × 4 / 2 = 10 каждому
-    const bToA = delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount
-    const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
-    expect(bToA).toBe(10)
-    expect(cToA).toBe(10)
+    // Вистующие взяли 5 на 6-й = 5 × 4 / 2 = 10 каждому + консоляция 1 (недобор 1)
+    const bToA = delta.whists.filter((w) => w.from === 'B' && w.to === 'A').reduce((s, w) => s + w.amount, 0)
+    const cToA = delta.whists.filter((w) => w.from === 'C' && w.to === 'A').reduce((s, w) => s + w.amount, 0)
+    // 10 за взятки + консоляция 1 × 4 = 4 → всего 14 каждому
+    expect(bToA).toBe(14)
+    expect(cToA).toBe(14)
   })
 
-  it('9♠ ремиз без 2, оба вистовали, взяли по 1', () => {
+  it('9♠ ремиз без 2, оба вистовали, взяли по 1 — с консоляцией', () => {
     const deal: Deal = {
       type: 'game',
       dealer: 'A',
@@ -102,11 +103,12 @@ describe('calcDeal — Ремиз играющего', () => {
     }
     const delta = calcDeal(deal)
     expect(delta.mount.C).toBe(2 * 16) // недобрал 2 × 16 = 32
-    // Вистующие взяли 3 на 9-й = 3 × 16 / 2 = 24 каждому
-    const aToC = delta.whists.find((w) => w.from === 'A' && w.to === 'C')?.amount
-    const bToC = delta.whists.find((w) => w.from === 'B' && w.to === 'C')?.amount
-    expect(aToC).toBe(24)
-    expect(bToC).toBe(24)
+    // Вистующие взяли 3 на 9-й = 3 × 16 / 2 = 24 каждому + консоляция 2
+    const aToC = delta.whists.filter((w) => w.from === 'A' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
+    const bToC = delta.whists.filter((w) => w.from === 'B' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
+    // 24 за взятки + консоляция 2 × 16 = 32 → всего 56 каждому
+    expect(aToC).toBe(56)
+    expect(bToC).toBe(56)
   })
 })
 
@@ -124,11 +126,11 @@ describe('calcDeal — Сталинград (6♠)', () => {
     }
     const delta = calcDeal(deal)
     expect(delta.mount.C).toBe(4) // ремиз без 1 × 4 = 4 в гору
-    // Вистующие взяли 5 = 5 × 4 / 2 = 10 каждому (джентльменский)
-    const aToC = delta.whists.find((w) => w.from === 'A' && w.to === 'C')?.amount
-    const bToC = delta.whists.find((w) => w.from === 'B' && w.to === 'C')?.amount
-    expect(aToC).toBe(10)
-    expect(bToC).toBe(10)
+    // Вистующие взяли 5 = 5 × 4 / 2 = 10 каждому + консоляция 1 × 4 = 4 → 14 каждому
+    const aToC = delta.whists.filter((w) => w.from === 'A' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
+    const bToC = delta.whists.filter((w) => w.from === 'B' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
+    expect(aToC).toBe(14)
+    expect(bToC).toBe(14)
   })
 })
 

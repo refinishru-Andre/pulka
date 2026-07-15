@@ -113,7 +113,14 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
         })
       }
     }
-    // Консоляция при ремизе — по умолчанию НЕ пишем (см. SPEC.md, открытый вопрос)
+    // Консоляция при ремизе играющего: каждому вистующему (в т.ч. пасовавшему)
+    // добавляется по (число_недобранных × стоимость_виста_игры) вистов
+    const consolation = shortfall * VIST_PER_TRICK[level]
+    if (consolation > 0) {
+      vs.forEach((v) => {
+        delta.whists.push({ from: v, to: player, amount: consolation })
+      })
+    }
   }
 
   return delta
