@@ -74,6 +74,42 @@ describe('calcDeal — Игра сыграна', () => {
     expect(delta.mount.B).toBe(0)
   })
 
+  it('9♠: пара взяла 0 (недобор пары 1), оба вистуют — каждому штраф 4', () => {
+    // 9-я: обязательство 1 на пару → индивидуально 0.5 каждому. Оба взяли 0 → недобор 0.5 каждому.
+    // Штраф = 0.5 × 8 = 4 в гору каждому. Всего 8 = штраф пары 1 × 8.
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'A',
+      contract: { kind: 'game', level: 9, suit: 'S' },
+      playerTricks: 10,
+      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(8) // сыгранная 9
+    expect(delta.mount.B).toBe(4)
+    expect(delta.mount.C).toBe(4)
+  })
+
+  it('9♠: один вист, взял 0 — недобор пары 1, весь штраф ему = 8', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'A',
+      contract: { kind: 'game', level: 9, suit: 'S' },
+      playerTricks: 10,
+      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(8)
+    expect(delta.mount.C).toBe(8) // весь штраф на единственного активного
+    expect(delta.mount.B).toBe(0)
+  })
+
   it('6♣: оба вистуют, взяли 1+2 — индивидуальная норма (норма 2 каждому)', () => {
     const deal: Deal = {
       type: 'game',
