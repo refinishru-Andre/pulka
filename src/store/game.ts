@@ -79,8 +79,11 @@ export const useGameStore = create<Store>()(
         })
       },
       resetGame: () => set({ game: null, redoStack: [] }),
-      // Пересчитать всё состояние из истории deals[] — на случай изменений движка
+      // Пересчитать всё состояние из истории deals[] — на случай изменений движка.
+      // Также гарантируем что redoStack инициализирован (после hydration может быть undefined).
       recalculate: () => {
+        // Инициализация redoStack если undefined (после hydration старой версии)
+        if (!get().redoStack) set({ redoStack: [] })
         const g = get().game
         if (!g || g.deals.length === 0) return
         const deals = g.deals
