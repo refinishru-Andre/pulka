@@ -28,7 +28,7 @@ function initState(): GameState {
 }
 
 describe('calcDeal — Игра сыграна', () => {
-  it('7♠ сыграна ровно, оба вистовали, взяли 1+2 — жлобский, каждый за свои', () => {
+  it('7♠ сыграна ровно, оба вистовали, взяли 1+2 — каждый за свои', () => {
     const deal: Deal = {
       type: 'game',
       dealer: 'C',
@@ -41,38 +41,61 @@ describe('calcDeal — Игра сыграна', () => {
     }
     const delta = calcDeal(deal)
     expect(delta.pool.C).toBe(4) // сыгранная 7 = 4 в пулю
+    // A за 1 = 8; B за 2 = 16. Обязательство 7-й = 2 на пару, по 1 на игрока.
+    // A взял 1 = норму, B взял 2 (переработал), штрафов нет.
     expect(delta.mount).toEqual({ A: 0, B: 0, C: 0 })
-    // A за 1 взятку = 1 × 8 = 8; B за 2 взятки = 2 × 8 = 16
     const aToC = delta.whists.find((w) => w.from === 'A' && w.to === 'C')?.amount
     const bToC = delta.whists.find((w) => w.from === 'B' && w.to === 'C')?.amount
     expect(aToC).toBe(8)
     expect(bToC).toBe(16)
   })
 
-  it('6♠ (Сталинград): А играл, О пасовал, Д вистовал, взял 3 — жлобский', () => {
-    // Живой пример Андрея: А играл 6, взял 7, О пасовал, Д взял 3
-    // Но берём 6♣ чтобы не путать со Сталинградом
+  it('6♣: О пас, Д вист — Д один за пару, пишет за ВСЕ взятки пары', () => {
+    // Живой пример Андрея: А играл 6, взял 7, О пасовал (взял 1), Д вистовал (взял 2)
     const deal: Deal = {
       type: 'game',
       dealer: 'A',
       firstHand: 'B',
       player: 'A',
-      contract: { kind: 'game', level: 6, suit: 'C' }, // не Сталинград
+      contract: { kind: 'game', level: 6, suit: 'C' },
       playerTricks: 7,
-      vistersTricks: { A: 0, B: 0, C: 3 },
+      vistersTricks: { A: 0, B: 1, C: 2 }, // B пас взял 1, C вист взял 2
       vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
     }
     const delta = calcDeal(deal)
-    expect(delta.pool.A).toBe(2) // сыграл 6 (даже с запасом)
-    // Пара взяла 3 при обязательстве 4 → штраф пары 1×2=2 на активных
-    // Активных = C (один). Значит гора C = 2.
+    expect(delta.pool.A).toBe(2)
+    // C — единственный активный, пишет за ВСЮ пару 3 взятки = 3 × 4 = 12
+    const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
+    expect(cToA).toBe(12)
+    // B пас — не пишет ничего
+    expect(delta.whists.find((w) => w.from === 'B')).toBeUndefined()
+    // Штраф за недобор пары 4-3=1 → 1×2=2, весь на активного C
     expect(delta.mount.C).toBe(2)
     expect(delta.mount.B).toBe(0)
-    // Висты: только активный C пишет за СВОИ 3 взятки = 3 × 4 = 12 на A
-    const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
+  })
+
+  it('6♣: оба вистуют, взяли 1+2 — индивидуальная норма (норма 2 каждому)', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'A',
+      contract: { kind: 'game', level: 6, suit: 'C' },
+      playerTricks: 7,
+      vistersTricks: { A: 0, B: 1, C: 2 },
+      vistDecisions: { A: 'vist', B: 'vist', C: 'vist' }, // оба вистуют
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(2)
+    // B взял 1 = 4 на A; C взял 2 = 8 на A
     const bToA = delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount
-    expect(cToA).toBe(12)
-    expect(bToA).toBeUndefined() // B пасовал — не пишет
+    const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
+    expect(bToA).toBe(4)
+    expect(cToA).toBe(8)
+    // B недобрал 1 (норма 2, взял 1) → 1 × 2 = 2 в гору B
+    // C взял 2 = норму → 0
+    expect(delta.mount.B).toBe(2)
+    expect(delta.mount.C).toBe(0)
   })
 
   it('9♥ сыграна с запасом (10 взяток), оба вистовали, взяли по 0', () => {

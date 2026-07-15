@@ -59,23 +59,34 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
   // Играющий сыграл?
   const success = playerTricks >= level
 
-  // Висты за фактические взятки — «жлобский» вариант Андрея: пишет ТОЛЬКО активный
-  // вистующий за свои личные взятки (пасовавший не пишет ничего, даже если взял по факту).
-  activeVisters.forEach((v) => {
-    const myTricks = deal.vistersTricks[v]
-    if (myTricks > 0) {
-      delta.whists.push({ from: v, to: player, amount: myTricks * VIST_PER_TRICK[level] })
-    }
-  })
-
-  // Штраф за недобор вистующих (полуответственный вист) — только на активных
+  // Висты за взятки и штраф за недобор — зависит от числа активных вистующих
   const duty = VISTERS_DUTY[level]
-  if (activeVisters.length > 0 && vTricksTotal < duty) {
-    const shortfall = duty - vTricksTotal
-    const penaltyTotal = shortfall * VISTER_PENALTY_PER_MISS[level]
-    const perActive = Math.round(penaltyTotal / activeVisters.length)
+  if (activeVisters.length === 1) {
+    // Только один вистует — он играет за всю пару, ему все взятки пары и весь штраф
+    const solo = activeVisters[0]
+    if (vTricksTotal > 0) {
+      delta.whists.push({ from: solo, to: player, amount: vTricksTotal * VIST_PER_TRICK[level] })
+    }
+    if (vTricksTotal < duty) {
+      const shortfall = duty - vTricksTotal
+      delta.mount[solo] += shortfall * VISTER_PENALTY_PER_MISS[level]
+    }
+  } else if (activeVisters.length === 2) {
+    // Оба вистуют — каждый за свои личные взятки
     activeVisters.forEach((v) => {
-      delta.mount[v] += perActive
+      const myTricks = deal.vistersTricks[v]
+      if (myTricks > 0) {
+        delta.whists.push({ from: v, to: player, amount: myTricks * VIST_PER_TRICK[level] })
+      }
+    })
+    // Индивидуальная норма = обязательство пары / 2. Штраф тому, кто взял меньше нормы.
+    const dutyPerPlayer = duty / 2
+    activeVisters.forEach((v) => {
+      const myTricks = deal.vistersTricks[v]
+      if (myTricks < dutyPerPlayer) {
+        const myShort = dutyPerPlayer - myTricks
+        delta.mount[v] += Math.round(myShort * VISTER_PENALTY_PER_MISS[level])
+      }
     })
   }
 
