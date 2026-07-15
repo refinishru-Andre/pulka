@@ -51,9 +51,21 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
   const { canSubmit, buildDeal } = useMemo(() => {
     if (dealType === 'game') {
       const visters = PLAYERS.filter((p) => p !== gamePlayer)
+      // Сталинград форсирует вист обоих на 6♠
+      const isStalingrad = gameLevel === 6 && gameSuit === 'S'
+      const effectiveDecisions = isStalingrad
+        ? { ...gameVistDecisions, ...Object.fromEntries(visters.map((v) => [v, 'vist' as const])) }
+        : gameVistDecisions
+      // Автомат-сценарии: оба пас; или полвиста + пас
+      const allPass = visters.every((v) => effectiveDecisions[v] === 'pass')
+      const halfAndPass =
+        visters.some((v) => effectiveDecisions[v] === 'half') &&
+        visters.some((v) => effectiveDecisions[v] === 'pass') &&
+        (gameLevel === 6 || gameLevel === 7)
+      const isAuto = allPass || halfAndPass
       const vTotal = visters.reduce((s, v) => s + gameVisterTricks[v], 0)
       const need = 10 - gamePlayerTricks
-      const ok = vTotal === need
+      const ok = isAuto || vTotal === need
       const contract: Contract = { kind: 'game', level: gameLevel, suit: gameSuit }
       return {
         canSubmit: ok,
@@ -63,8 +75,9 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
           firstHand: game.firstHand,
           player: gamePlayer,
           contract,
-          playerTricks: gamePlayerTricks,
-          vistersTricks: gameVisterTricks,
+          // Для автомат-сценариев ставим playerTricks=level и vistersTricks=0
+          playerTricks: isAuto ? gameLevel : gamePlayerTricks,
+          vistersTricks: isAuto ? { A: 0, B: 0, C: 0 } : gameVisterTricks,
           vistDecisions: gameVistDecisions,
         }),
       }
@@ -252,6 +265,16 @@ function GameFormFields(props: {
   const tricksOk = entered === need
   const availableLevels = GAME_LEVELS.filter((l) => l >= minBid)
   const isStalingrad = gameLevel === 6 && gameSuit === 'S'
+  // Автомат-сценарии: без розыгрыша, играющему пуля автоматом
+  const effVistDecisions = isStalingrad
+    ? { ...gameVistDecisions, ...Object.fromEntries(visters.map((v) => [v, 'vist' as const])) }
+    : gameVistDecisions
+  const allPassAuto = visters.every((v) => effVistDecisions[v] === 'pass')
+  const halfAndPassAuto =
+    visters.some((v) => effVistDecisions[v] === 'half') &&
+    visters.some((v) => effVistDecisions[v] === 'pass') &&
+    (gameLevel === 6 || gameLevel === 7)
+  const isAuto = allPassAuto || halfAndPassAuto
 
   return (
     <div className="space-y-3">
@@ -307,30 +330,32 @@ function GameFormFields(props: {
         </div>
       </div>
 
-      {/* Взятки играющего */}
-      <div>
-        <div className="text-xs text-slate-400 mb-1">
-          Взял играющий {gamePlayerTricks >= gameLevel
-            ? `· сыграл${gamePlayerTricks > gameLevel ? ` +${gamePlayerTricks - gameLevel}` : ''}`
-            : `· недобор ${gameLevel - gamePlayerTricks}`}
+      {/* Взятки играющего — только если требуется розыгрыш */}
+      {!isAuto && (
+        <div>
+          <div className="text-xs text-slate-400 mb-1">
+            Взял играющий {gamePlayerTricks >= gameLevel
+              ? `· сыграл${gamePlayerTricks > gameLevel ? ` +${gamePlayerTricks - gameLevel}` : ''}`
+              : `· недобор ${gameLevel - gamePlayerTricks}`}
+          </div>
+          <div className="grid grid-cols-11 gap-1">
+            {Array.from({ length: 11 }, (_, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  setGamePlayerTricks(i)
+                  setGameVisterTricks({ A: 0, B: 0, C: 0 })
+                }}
+                className={`py-2 rounded-lg font-semibold text-sm ${
+                  gamePlayerTricks === i ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
+                }`}
+              >
+                {i}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-11 gap-1">
-          {Array.from({ length: 11 }, (_, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                setGamePlayerTricks(i)
-                setGameVisterTricks({ A: 0, B: 0, C: 0 })
-              }}
-              className={`py-2 rounded-lg font-semibold text-sm ${
-                gamePlayerTricks === i ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
-              }`}
-            >
-              {i}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* Вистовали */}
       <div>
@@ -371,8 +396,20 @@ function GameFormFields(props: {
         </div>
       </div>
 
+      {/* Автомат-сценарий: показываем инфо-плашку вместо полей */}
+      {isAuto && (
+        <div className="px-3 py-2 bg-slate-900 rounded-lg text-sm text-slate-300">
+          {allPassAuto && (
+            <>Оба вистующих пасовали — игра автоматом. Играющему пуля +{gameLevel === 6 ? 2 : gameLevel === 7 ? 4 : gameLevel === 8 ? 6 : gameLevel === 9 ? 8 : 10}.</>
+          )}
+          {halfAndPassAuto && (
+            <>Полвиста — игра без розыгрыша. Играющему пуля, полвистовому висты за {gameLevel === 6 ? 2 : 1} взятки.</>
+          )}
+        </div>
+      )}
+
       {/* Взятки вистующих */}
-      {need > 0 && (
+      {!isAuto && need > 0 && (
         <div>
           <div className={`text-xs mb-1 ${tricksOk ? 'text-slate-400' : 'text-red-400'}`}>
             Взятки вистующих — распределить {need} ({entered}/{need})

@@ -238,6 +238,79 @@ describe('calcDeal — Ремиз играющего', () => {
   })
 })
 
+describe('Автомат-сценарии (без розыгрыша)', () => {
+  it('оба пасовали на 6-й → играющий получает 2 в пулю, вистам ничего', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6, suit: 'C' },
+      playerTricks: 6, // не важно
+      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistDecisions: { A: 'vist', B: 'pass', C: 'pass' },
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(2)
+    expect(delta.mount).toEqual({ A: 0, B: 0, C: 0 })
+    expect(delta.whists).toHaveLength(0)
+  })
+
+  it('оба пасовали на 9-й → играющий получает 8 в пулю автоматом', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 9, suit: 'H' },
+      playerTricks: 0,
+      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistDecisions: { A: 'vist', B: 'pass', C: 'pass' },
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(8)
+    expect(delta.whists).toHaveLength(0)
+  })
+
+  it('полвиста + пас на 6-й → играющий пуля, полвистовому за 2 взятки = 8 вистов', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6, suit: 'C' },
+      playerTricks: 6,
+      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistDecisions: { A: 'vist', B: 'pass', C: 'half' },
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(2)
+    // Полвистовому (C) за 2 взятки × 4 = 8 на A
+    const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
+    expect(cToA).toBe(8)
+    // B (пас) ничего
+    expect(delta.whists.find((w) => w.from === 'B')).toBeUndefined()
+  })
+
+  it('полвиста + пас на 7-й → полвистовому за 1 взятку = 8 вистов', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 7, suit: 'S' },
+      playerTricks: 7,
+      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistDecisions: { A: 'vist', B: 'half', C: 'pass' },
+    }
+    const delta = calcDeal(deal)
+    expect(delta.pool.A).toBe(4)
+    // Полвистовому (B) за 1 взятку × 8 = 8 на A
+    const bToA = delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount
+    expect(bToA).toBe(8)
+  })
+})
+
 describe('calcDeal — Сталинград (6♠)', () => {
   it('6♠: оба принудительно вистуют, ремиз — жлобский за свои + консоляция', () => {
     const deal: Deal = {

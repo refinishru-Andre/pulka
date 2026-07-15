@@ -45,11 +45,25 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
     ? { ...deal.vistDecisions, ...Object.fromEntries(vs.map((v) => [v, 'vist' as const])) }
     : deal.vistDecisions
 
-  // Оба вистующих пасовали → «на своих» для 6/7, автоматическая победа для 8+
+  // СПЕЦ-СЛУЧАЙ 1: оба вистующих пасовали → игра автомат, без розыгрыша (на любом уровне)
   const allPassed = vs.every((v) => effectiveDecisions[v] === 'pass')
-  if (allPassed && level >= 8) {
-    // Игра завершается без розыгрыша, играющий пишет пулю
+  if (allPassed) {
     delta.pool[player] += POOL_COST[level]
+    return delta
+  }
+
+  // СПЕЦ-СЛУЧАЙ 2: один пас + один полвиста (только на 6 и 7) → автомат
+  // Играющему — пуля, полвистовому — фиксированные взятки в вистах
+  const halfPlayer = vs.find((v) => effectiveDecisions[v] === 'half')
+  const passPlayerForHalf = vs.find((v) => effectiveDecisions[v] === 'pass')
+  if (halfPlayer && passPlayerForHalf && (level === 6 || level === 7)) {
+    delta.pool[player] += POOL_COST[level]
+    const halfTricks = level === 6 ? 2 : 1
+    delta.whists.push({
+      from: halfPlayer,
+      to: player,
+      amount: halfTricks * VIST_PER_TRICK[level],
+    })
     return delta
   }
 
