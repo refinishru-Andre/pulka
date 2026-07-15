@@ -15,6 +15,8 @@ const RASPAS_LABEL: Record<string, string> = {
 export function Table() {
   const game = useGameStore((s) => s.game)!
   const undoDeal = useGameStore((s) => s.undoDeal)
+  const redoDeal = useGameStore((s) => s.redoDeal)
+  const redoStack = useGameStore((s) => s.redoStack)
   const resetGame = useGameStore((s) => s.resetGame)
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -125,6 +127,14 @@ export function Table() {
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-sm"
           >
             ⟲ Отменить
+          </button>
+          <button
+            onClick={redoDeal}
+            disabled={redoStack.length === 0}
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-sm"
+            title={redoStack.length > 0 ? `Можно вернуть ${redoStack.length} сдач(и)` : ''}
+          >
+            Вперёд ⟳{redoStack.length > 0 && ` (${redoStack.length})`}
           </button>
           {confirmReset ? (
             <>

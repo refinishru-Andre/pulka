@@ -10,6 +10,7 @@ const CALC_VERSION = 2
 
 interface Store {
   game: GameState | null
+  redoStack: Deal[] // отменённые сдачи для «Вперёд»
   newGame: (params: {
     players: Record<PlayerId, string>
     poolLimit: number
@@ -17,6 +18,7 @@ interface Store {
   }) => void
   addDeal: (deal: Deal) => void
   undoDeal: () => void
+  redoDeal: () => void
   resetGame: () => void
   recalculate: () => void
 }
@@ -46,20 +48,37 @@ export const useGameStore = create<Store>()(
   persist(
     (set, get) => ({
       game: null,
+      redoStack: [],
       newGame: ({ players, poolLimit, firstHand }) => {
-        set({ game: initialGameState(players, poolLimit, firstHand) })
+        set({ game: initialGameState(players, poolLimit, firstHand), redoStack: [] })
       },
       addDeal: (deal) => {
         const g = get().game
         if (!g) return
-        set({ game: applyDeal(g, deal) })
+        // Новая сдача очищает redo — после развилки старая ветка бессмысленна
+        set({ game: applyDeal(g, deal), redoStack: [] })
       },
       undoDeal: () => {
         const g = get().game
         if (!g || g.deals.length === 0) return
-        set({ game: undoLastDeal(g) })
+        // Кладём последнюю сдачу в redoStack и откатываем
+        const lastDeal = g.deals[g.deals.length - 1]
+        set({
+          game: undoLastDeal(g),
+          redoStack: [...get().redoStack, lastDeal],
+        })
       },
-      resetGame: () => set({ game: null }),
+      redoDeal: () => {
+        const stack = get().redoStack
+        const g = get().game
+        if (!g || stack.length === 0) return
+        const deal = stack[stack.length - 1]
+        set({
+          game: applyDeal(g, deal),
+          redoStack: stack.slice(0, -1),
+        })
+      },
+      resetGame: () => set({ game: null, redoStack: [] }),
       // Пересчитать всё состояние из истории deals[] — на случай изменений движка
       recalculate: () => {
         const g = get().game
