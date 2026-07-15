@@ -4,6 +4,7 @@ import { settle, minBidFor, calcDeal } from '../engine'
 import { PLAYERS } from '../engine/types'
 import type { PlayerId } from '../engine/types'
 import { DealForm } from './DealForm'
+import { TrianglePool } from '../components/TrianglePool'
 
 const RASPAS_LABEL: Record<string, string> = {
   normal: 'Обычная игра · мин 6',
@@ -36,33 +37,7 @@ export function Table() {
       lastWhistDelta[w.from][w.to] += w.amount
     })
   }
-  const playerHasChanges = (p: PlayerId): boolean => {
-    if (!lastDelta) return false
-    if (lastDelta.pool[p] !== 0 || lastDelta.mount[p] !== 0) return true
-    if (PLAYERS.some((o) => lastWhistDelta[p][o] !== 0 || lastWhistDelta[o][p] !== 0)) return true
-    return false
-  }
-
-  const playerColor = (p: PlayerId) => {
-    if (p === game.firstHand) return 'ring-4 ring-yellow-500'
-    return ''
-  }
-
-  // Компонент для показа дельты
-  const Delta = ({ value }: { value: number }) => {
-    if (value === 0) return null
-    const positive = value > 0
-    return (
-      <span
-        className={`ml-2 text-sm font-bold px-1.5 py-0.5 rounded ${
-          positive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-        }`}
-      >
-        {positive ? '+' : ''}
-        {value}
-      </span>
-    )
-  }
+  // (Все визуальные детали игроков рисует TrianglePool.)
 
   return (
     <div className="min-h-screen p-4 lg:p-8">
@@ -123,84 +98,14 @@ export function Table() {
         )}
       </div>
 
-      {/* Основной блок: 3 колонки игроков */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {PLAYERS.map((p) => {
-          const closed = game.pool[p] >= game.poolLimit
-          const progress = Math.min(100, (game.pool[p] / game.poolLimit) * 100)
-          const changed = playerHasChanges(p)
-          const poolD = lastDelta?.pool[p] ?? 0
-          const mountD = lastDelta?.mount[p] ?? 0
-          const changedClass = changed && p !== game.firstHand ? 'ring-2 ring-blue-500/50' : ''
-          return (
-            <div key={p} className={`bg-slate-800 rounded-2xl p-5 ${playerColor(p)} ${changedClass}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xl font-bold truncate">{game.players[p]}</div>
-                {p === game.firstHand && (
-                  <span className="text-xs bg-yellow-500 text-slate-900 px-2 py-1 rounded font-semibold">
-                    1 РУКА
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-2 mb-3">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-slate-400">Пуля</span>
-                  <span className="text-2xl font-bold text-pool">
-                    {game.pool[p]}
-                    <span className="text-sm text-slate-500 ml-1">/ {game.poolLimit}</span>
-                    <Delta value={poolD} />
-                  </span>
-                </div>
-                <div className="h-2 bg-slate-900 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${closed ? 'bg-yellow-500' : 'bg-pool'} transition-all`}
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-sm text-slate-400">Гора</span>
-                <span className="text-xl font-bold text-mount">
-                  {game.mount[p]}
-                  <Delta value={mountD} />
-                </span>
-              </div>
-
-              <div className="border-t border-slate-700 mt-3 pt-2">
-                <div className="text-xs text-slate-500 mb-1">Висты на кого написал</div>
-                {PLAYERS.filter((o) => o !== p).map((o) => (
-                  <div key={o} className="flex justify-between items-baseline text-sm">
-                    <span className="text-slate-400">→ {game.players[o]}</span>
-                    <span className="text-whist">
-                      {game.whists[p][o]}
-                      <Delta value={lastWhistDelta[p][o]} />
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t border-slate-700 mt-2 pt-2">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-xs text-slate-500">Итог (висты)</span>
-                  <span
-                    className={`text-lg font-bold ${
-                      settlement.net[p] > 0
-                        ? 'text-green-400'
-                        : settlement.net[p] < 0
-                          ? 'text-red-400'
-                          : 'text-slate-400'
-                    }`}
-                  >
-                    {settlement.net[p] > 0 ? '+' : ''}
-                    {settlement.net[p]}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )
-        })}
+      {/* Треугольная пуля */}
+      <div className="max-w-4xl mx-auto mb-4">
+        <TrianglePool
+          game={game}
+          lastDelta={lastDelta}
+          lastWhistDelta={lastWhistDelta}
+          netVists={settlement.net}
+        />
       </div>
 
       {/* Информация о последней сдаче */}

@@ -18,6 +18,7 @@ interface Store {
   addDeal: (deal: Deal) => void
   undoDeal: () => void
   resetGame: () => void
+  recalculate: () => void
 }
 
 const initialGameState = (
@@ -59,6 +60,27 @@ export const useGameStore = create<Store>()(
         set({ game: undoLastDeal(g) })
       },
       resetGame: () => set({ game: null }),
+      // Пересчитать всё состояние из истории deals[] — на случай изменений движка
+      recalculate: () => {
+        const g = get().game
+        if (!g || g.deals.length === 0) return
+        const deals = g.deals
+        const initial: GameState = {
+          ...g,
+          pool: { A: 0, B: 0, C: 0 },
+          mount: { A: 0, B: 0, C: 0 },
+          whists: {
+            A: { A: 0, B: 0, C: 0 },
+            B: { A: 0, B: 0, C: 0 },
+            C: { A: 0, B: 0, C: 0 },
+          },
+          firstHand: deals[0].firstHand,
+          raspasState: 'normal',
+          eightRaspasCounter: { A: 0, B: 0, C: 0 },
+          deals: [],
+        }
+        set({ game: deals.reduce(applyDeal, initial) })
+      },
     }),
     {
       name: 'pulka-game-v1',
