@@ -120,7 +120,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
     }
   }, [
     dealType, game.firstHand, gamePlayer, gameLevel, gameSuit, gamePlayerTricks,
-    gameVisterTricks, gameVistDecisions, misPlayer, misBlind, misTricks,
+    gameVisterTricks, gameVistDecisions, misPlayer, misTricks,
     raspasTricks, raspasState, giveupPlayer, giveupLevel, giveupSuit,
   ])
 
