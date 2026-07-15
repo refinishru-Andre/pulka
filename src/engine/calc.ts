@@ -150,7 +150,10 @@ function calcMisere(deal: Extract<Deal, { type: 'misere' }>): DealDelta {
   return delta
 }
 
-// Расчёт «Распасы» (амнистия минимума)
+// Расчёт «Распасы» (амнистия минимума + бонус за 0 взяток).
+// Правило Андрея: игрок, взявший 0 взяток на распасе, списывает с горы
+// удвоенную цену распаса (для 1-го = −4, 2-го = −8, 8-мерного = −12).
+// Списание не может увести гору ниже нуля (обрежется в applyDeal через state).
 function calcRaspas(deal: Extract<Deal, { type: 'raspas' }>): DealDelta {
   const delta = emptyDelta()
   const cost = RASPAS_TRICK_COST[deal.level]
@@ -159,6 +162,10 @@ function calcRaspas(deal: Extract<Deal, { type: 'raspas' }>): DealDelta {
   PLAYERS.forEach((p) => {
     const extra = tricks[p] - min
     if (extra > 0) delta.mount[p] += extra * cost
+    // Бонус за «чистый» распас (0 взяток): -2*cost с горы
+    if (tricks[p] === 0) {
+      delta.mount[p] -= 2 * cost
+    }
   })
   return delta
 }

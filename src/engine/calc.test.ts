@@ -365,6 +365,44 @@ describe('calcDeal — Мизер', () => {
 })
 
 describe('calcDeal — Распасы', () => {
+  it('1-й распас: A взял 0 → бонус -4 с горы (при большой горе)', async () => {
+    const { applyDeal } = await import('./index')
+    const state = initState()
+    state.mount = { A: 58, B: 0, C: 40 }
+    const deal: Deal = {
+      type: 'raspas',
+      dealer: 'A',
+      firstHand: 'B',
+      level: 1,
+      tricks: { A: 0, B: 3, C: 7 },
+    }
+    const newState = applyDeal(state, deal)
+    // A взял 0 → -4 с горы: 58 - 4 = 54. Также amnesty min=0, штрафа нет.
+    expect(newState.mount.A).toBe(54)
+    // B: (3-0)*2 = 6 → 0+6=6
+    expect(newState.mount.B).toBe(6)
+    // C: (7-0)*2 = 14 → 40+14=54
+    expect(newState.mount.C).toBe(54)
+  })
+
+  it('1-й распас: A взял 0 при горе 2 → уходит в минус (гора не ограничена)', async () => {
+    const { applyDeal } = await import('./index')
+    const state = initState()
+    state.mount = { A: 2, B: 0, C: 0 }
+    const deal: Deal = {
+      type: 'raspas',
+      dealer: 'A',
+      firstHand: 'B',
+      level: 1,
+      tricks: { A: 0, B: 5, C: 5 },
+    }
+    const newState = applyDeal(state, deal)
+    // A: 2 - 4 = -2
+    expect(newState.mount.A).toBe(-2)
+    expect(newState.mount.B).toBe(10)
+    expect(newState.mount.C).toBe(10)
+  })
+
   it('1-й распас: 4-3-3, амнистия минимума', () => {
     const deal: Deal = {
       type: 'raspas',

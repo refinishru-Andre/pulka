@@ -57,7 +57,7 @@ export function applyDeal(state: GameState, deal: Deal): GameState {
   }
   PLAYERS.forEach((p) => {
     newPool[p] += delta.pool[p]
-    newMount[p] += delta.mount[p]
+    newMount[p] += delta.mount[p] // гора может уходить в минус — не ограничиваем
   })
   delta.whists.forEach((w) => {
     newWhists[w.from][w.to] += w.amount
