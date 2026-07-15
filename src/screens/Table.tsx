@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGameStore } from '../store/game'
-import { settle, minBidFor, calcDeal } from '../engine'
+import { settle, minBidFor } from '../engine'
 import { PLAYERS } from '../engine/types'
 import type { PlayerId } from '../engine/types'
 import { DealForm } from './DealForm'
@@ -24,9 +24,9 @@ export function Table() {
   const settlement = settle(game)
   const minBid = minBidFor(game.raspasState)
 
-  // Дельта от последней сдачи — для подсветки изменений
+  // Дельта от последней сдачи (с учётом перекрытия пули) — из state
   const lastDeal = game.deals[game.deals.length - 1]
-  const lastDelta = lastDeal ? calcDeal(lastDeal) : null
+  const lastDelta = game.lastDelta ?? null
   // whists суммируем по (from,to) — может быть несколько записей (например висты + консоляция)
   const lastWhistDelta: Record<PlayerId, Record<PlayerId, number>> = {
     A: { A: 0, B: 0, C: 0 },

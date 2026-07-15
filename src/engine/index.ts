@@ -6,7 +6,7 @@ export * from './calc'
 export * from './settle'
 export * from './raspas'
 
-import type { Deal, GameState, PlayerId } from './types'
+import type { Deal, GameState, PlayerId, DealDelta } from './types'
 import { calcDeal } from './calc'
 import { nextRaspasState, nextFirstHand, updateEightCounter, nextClockwise } from './raspas'
 import { PLAYERS } from './types'
@@ -14,37 +14,40 @@ import { PLAYERS } from './types'
 // Правило Андрея: 1 очко переданной пули = 10 вистов
 const POOL_TRANSFER_VISTS_PER_POINT = 10
 
-// Обработка переполнения пули: если игрок набрал > poolLimit,
-// излишек передаётся следующему по часовой игроку, у которого пуля не закрыта.
-// За каждое переданное очко получатель пишет 10 вистов передающему.
-function handlePoolOverflow(
-  pool: Record<PlayerId, number>,
-  whists: Record<PlayerId, Record<PlayerId, number>>,
-  poolLimit: number,
-): void {
+// Полная дельта: базовый calcDeal + учёт перекрытия пули (для отображения и применения)
+export function calcDealFull(state: GameState, deal: Deal): DealDelta {
+  const delta = calcDeal(deal)
+  // Симулируем pool после базовой delta
+  const pool: Record<PlayerId, number> = { ...state.pool }
+  PLAYERS.forEach((p) => (pool[p] += delta.pool[p]))
+
+  // Обработка перекрытия
   for (const p of PLAYERS) {
-    if (pool[p] <= poolLimit) continue
-    let excess = pool[p] - poolLimit
-    pool[p] = poolLimit
+    if (pool[p] <= state.poolLimit) continue
+    let excess = pool[p] - state.poolLimit
+    // Обрезаем избыток из delta.pool[p]
+    delta.pool[p] -= excess
+    pool[p] = state.poolLimit
+    // Передаём соседям по часовой
     let next = nextClockwise(p)
-    // Максимум 2 итерации для 3 игроков (кроме себя)
     for (let i = 0; i < PLAYERS.length - 1 && excess > 0; i++) {
-      const room = poolLimit - pool[next]
+      const room = state.poolLimit - pool[next]
       if (room > 0) {
         const transfer = Math.min(excess, room)
+        delta.pool[next] += transfer
         pool[next] += transfer
-        whists[next][p] += transfer * POOL_TRANSFER_VISTS_PER_POINT
+        delta.whists.push({ from: next, to: p, amount: transfer * POOL_TRANSFER_VISTS_PER_POINT })
         excess -= transfer
       }
       next = nextClockwise(next)
     }
-    // Если excess > 0 и все закрыты — избыток теряется (партия окончена)
   }
+  return delta
 }
 
 // Применить сдачу к состоянию → новое состояние
 export function applyDeal(state: GameState, deal: Deal): GameState {
-  const delta = calcDeal(deal)
+  const delta = calcDealFull(state, deal)
   const newPool = { ...state.pool }
   const newMount = { ...state.mount }
   const newWhists = {
@@ -60,9 +63,6 @@ export function applyDeal(state: GameState, deal: Deal): GameState {
     newWhists[w.from][w.to] += w.amount
   })
 
-  // Правило перекрытия пули — после начисления
-  handlePoolOverflow(newPool, newWhists, state.poolLimit)
-
   const newRaspas = nextRaspasState(state, deal)
   const newFirstHand = nextFirstHand(state, deal, newRaspas)
   const newCounter = updateEightCounter(state, newRaspas, state.firstHand)
@@ -76,6 +76,7 @@ export function applyDeal(state: GameState, deal: Deal): GameState {
     firstHand: newFirstHand,
     eightRaspasCounter: newCounter,
     deals: [...state.deals, deal],
+    lastDelta: delta,
   }
 }
 
