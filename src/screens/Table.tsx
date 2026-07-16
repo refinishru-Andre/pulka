@@ -55,7 +55,7 @@ export function Table() {
     const positive = value > 0
     return (
       <span
-        className={`ml-2 text-sm font-bold px-1.5 py-0.5 rounded ${
+        className={`ml-2 text-base font-bold px-2 py-0.5 rounded ${
           positive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
         }`}
       >
@@ -113,23 +113,23 @@ export function Table() {
   return (
     <div className="min-h-screen p-4 lg:p-8">
       {/* Заголовок */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-2xl font-bold">Пулька</h1>
-          <div className="text-sm text-slate-400 flex items-center gap-3 flex-wrap">
+          <h1 className="text-3xl font-bold">Пулька</h1>
+          <div className="text-base text-slate-400 flex items-center gap-3 flex-wrap mt-1">
             <span>Пуля до {game.poolLimit}</span>
             <span>·</span>
-            <span>сдач сыграно: {game.deals.length}</span>
+            <span>сдач: {game.deals.length}</span>
             <span>·</span>
             {(() => {
               const sumPool = PLAYERS.reduce((s, p) => s + game.pool[p], 0)
               const inGame = game.poolLimit * PLAYERS.length - sumPool
               if (inGame <= 0) {
-                return <span className="font-bold text-green-400">Партия окончена</span>
+                return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
               }
               const critical = inGame <= 5
               return (
-                <span className={critical ? 'font-bold text-red-400 text-base' : ''}>
+                <span className={critical ? 'font-bold text-red-400 text-lg' : ''}>
                   в игре: {inGame}
                 </span>
               )
@@ -140,14 +140,14 @@ export function Table() {
           <button
             onClick={undoDeal}
             disabled={game.deals.length === 0}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-sm"
+            className="px-5 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
           >
             ⟲ Отменить
           </button>
           <button
             onClick={redoDeal}
             disabled={redoStack.length === 0}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-sm"
+            className="px-5 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
             title={redoStack.length > 0 ? `Можно вернуть ${redoStack.length} сдач(и)` : ''}
           >
             Вперёд ⟳{redoStack.length > 0 && ` (${redoStack.length})`}
@@ -159,13 +159,13 @@ export function Table() {
                   resetGame()
                   setConfirmReset(false)
                 }}
-                className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm font-semibold"
+                className="px-5 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-base font-bold"
               >
                 Точно?
               </button>
               <button
                 onClick={() => setConfirmReset(false)}
-                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm"
+                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
               >
                 Нет
               </button>
@@ -173,7 +173,7 @@ export function Table() {
           ) : (
             <button
               onClick={() => setConfirmReset(true)}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm"
+              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
             >
               Новая игра
             </button>
@@ -182,9 +182,9 @@ export function Table() {
       </div>
 
       {/* Состояние распасов */}
-      <div className="mb-4 px-4 py-2 bg-slate-800 rounded-lg text-center text-sm">
+      <div className="mb-5 px-5 py-3 bg-slate-800 rounded-lg text-center text-base">
         <span className="text-slate-400">Состояние: </span>
-        <span className="font-semibold">{RASPAS_LABEL[game.raspasState]}</span>
+        <span className="font-bold">{RASPAS_LABEL[game.raspasState]}</span>
         {game.raspasState === 'eightRaspas' && (
           <span className="text-slate-400 ml-3">
             · круг:{' '}
@@ -194,7 +194,7 @@ export function Table() {
       </div>
 
       {/* Основной блок: 3 колонки игроков */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-3 gap-5 mb-5">
         {PLAYERS.map((p) => {
           const closed = game.pool[p] >= game.poolLimit
           const progress = Math.min(100, (game.pool[p] / game.poolLimit) * 100)
@@ -203,12 +203,12 @@ export function Table() {
           const mountD = lastDelta?.mount[p] ?? 0
           const changedClass = changed && p !== game.firstHand ? 'ring-2 ring-blue-500/50' : ''
           return (
-            <div key={p} className={`bg-slate-800 rounded-2xl p-5 ${playerColor(p)} ${changedClass}`}>
-              <div className="flex items-center justify-between mb-3 gap-2">
-                <div className="text-xl font-bold truncate">{game.players[p]}</div>
+            <div key={p} className={`bg-slate-800 rounded-2xl p-6 ${playerColor(p)} ${changedClass}`}>
+              <div className="flex items-center justify-between mb-4 gap-2">
+                <div className="text-2xl font-bold truncate">{game.players[p]}</div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`text-2xl font-extrabold ${
+                    className={`text-3xl font-extrabold ${
                       settlement.net[p] > 0
                         ? 'text-green-400'
                         : settlement.net[p] < 0
@@ -220,23 +220,23 @@ export function Table() {
                     {settlement.net[p]}
                   </span>
                   {p === game.firstHand && (
-                    <span className="text-xs bg-yellow-500 text-slate-900 px-2 py-1 rounded font-semibold">
+                    <span className="text-sm bg-yellow-500 text-slate-900 px-2.5 py-1 rounded font-bold">
                       1 РУКА
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="space-y-2 mb-3">
+              <div className="space-y-2 mb-4">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-sm text-slate-400">Пуля</span>
-                  <span className="text-2xl font-bold text-pool">
+                  <span className="text-base text-slate-400">Пуля</span>
+                  <span className="text-3xl font-bold text-pool">
                     {game.pool[p]}
-                    <span className="text-sm text-slate-500 ml-1">/ {game.poolLimit}</span>
+                    <span className="text-base text-slate-500 ml-1">/ {game.poolLimit}</span>
                     <Delta value={poolD} />
                   </span>
                 </div>
-                <div className="h-2 bg-slate-900 rounded-full overflow-hidden">
+                <div className="h-3 bg-slate-900 rounded-full overflow-hidden">
                   <div
                     className={`h-full ${closed ? 'bg-yellow-500' : 'bg-pool'} transition-all`}
                     style={{ width: `${progress}%` }}
@@ -244,20 +244,20 @@ export function Table() {
                 </div>
               </div>
 
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-sm text-slate-400">Гора</span>
-                <span className="text-xl font-bold text-mount">
+              <div className="flex justify-between items-baseline mb-3">
+                <span className="text-base text-slate-400">Гора</span>
+                <span className="text-2xl font-bold text-mount">
                   {game.mount[p]}
                   <Delta value={mountD} />
                 </span>
               </div>
 
-              <div className="border-t border-slate-700 mt-3 pt-2">
-                <div className="text-xs text-slate-500 mb-1">Висты на кого написал</div>
+              <div className="border-t border-slate-700 mt-4 pt-3">
+                <div className="text-sm text-slate-500 mb-2">Висты на кого написал</div>
                 {PLAYERS.filter((o) => o !== p).map((o) => (
-                  <div key={o} className="flex justify-between items-baseline text-sm">
+                  <div key={o} className="flex justify-between items-baseline text-lg mb-1">
                     <span className="text-slate-400">→ {game.players[o]}</span>
-                    <span className="text-whist">
+                    <span className="text-whist font-semibold">
                       {game.whists[p][o]}
                       <Delta value={lastWhistDelta[p][o]} />
                     </span>
@@ -277,7 +277,7 @@ export function Table() {
             Последняя сдача — расчёт
           </div>
           {explanation.map((line, i) => (
-            <div key={i} className={`text-sm ${line === '' ? 'h-2' : 'text-slate-300'}`}>
+            <div key={i} className={`text-sm ${line === '' ? 'h-2' : 'text-slate-400'}`}>
               {line}
             </div>
           ))}
@@ -286,15 +286,15 @@ export function Table() {
 
       {/* Попарные долги */}
       {settlement.pairwise.length > 0 && (
-        <div className="mb-6 bg-slate-800 rounded-2xl p-4">
-          <div className="text-sm text-slate-400 mb-2">Кто кому должен (висты)</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        <div className="mb-6 bg-slate-800 rounded-2xl p-5">
+          <div className="text-base text-slate-400 mb-3 font-semibold">Кто кому должен (висты)</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {settlement.pairwise.map((d, i) => (
-              <div key={i} className="bg-slate-900 rounded-lg px-4 py-3 flex items-center justify-between">
-                <span className="text-slate-300">
+              <div key={i} className="bg-slate-900 rounded-lg px-5 py-4 flex items-center justify-between">
+                <span className="text-slate-300 text-lg">
                   {game.players[d.from]} → {game.players[d.to]}
                 </span>
-                <span className="text-lg font-bold text-yellow-500">{d.amount}</span>
+                <span className="text-2xl font-bold text-yellow-500">{d.amount}</span>
               </div>
             ))}
           </div>
@@ -304,7 +304,7 @@ export function Table() {
       {/* Кнопка записи сдачи */}
       <button
         onClick={() => setDealFormOpen(true)}
-        className="fixed bottom-6 right-6 lg:relative lg:bottom-auto lg:right-auto lg:w-full py-5 bg-green-600 hover:bg-green-500 rounded-2xl text-xl font-bold shadow-2xl lg:shadow-none px-8"
+        className="fixed bottom-6 right-6 lg:relative lg:bottom-auto lg:right-auto lg:w-full py-6 bg-green-600 hover:bg-green-500 rounded-2xl text-2xl font-bold shadow-2xl lg:shadow-none px-8"
       >
         + Записать сдачу
       </button>
