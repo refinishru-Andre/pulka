@@ -30,13 +30,17 @@ export async function loginWithCode(code: string): Promise<void> {
   const cred = await credentialsFor(code)
   // Пробуем войти
   const signIn = await supabase.auth.signInWithPassword(cred)
-  if (!signIn.error) return
+  if (!signIn.error && signIn.data.session) return
 
   // Не получилось → регистрируемся
   const signUp = await supabase.auth.signUp(cred)
   if (signUp.error) {
-    // Возможно уже зарегистрирован, но пароль не совпал — попробуем ещё раз войти
+    throw new Error(`Регистрация: ${signUp.error.message}`)
+  }
+  // После signUp с autoconfirm сессия должна установиться автоматически.
+  // На всякий случай попробуем ещё раз signIn если сессии нет.
+  if (!signUp.data.session) {
     const retry = await supabase.auth.signInWithPassword(cred)
-    if (retry.error) throw new Error('Не удалось войти. Проверь кодовое слово.')
+    if (retry.error) throw new Error(`Вход после регистрации: ${retry.error.message}`)
   }
 }
