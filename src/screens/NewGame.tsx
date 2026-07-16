@@ -3,7 +3,12 @@ import { useGameStore } from '../store/game'
 import type { PlayerId } from '../engine/types'
 import { PLAYERS } from '../engine/types'
 
-export function NewGame() {
+interface Props {
+  onCancel?: () => void
+  onCreated?: () => void
+}
+
+export function NewGame({ onCancel, onCreated }: Props = {}) {
   const newGame = useGameStore((s) => s.newGame)
   const [names, setNames] = useState<Record<PlayerId, string>>({ A: '', B: '', C: '' })
   const [poolLimit, setPoolLimit] = useState(21)
@@ -22,6 +27,7 @@ export function NewGame() {
       poolLimit,
       firstHand,
     })
+    onCreated?.()
   }
 
   return (
@@ -98,13 +104,23 @@ export function NewGame() {
             </div>
           </div>
 
-          <button
-            onClick={handleStart}
-            disabled={!canStart}
-            className="w-full py-4 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-xl transition"
-          >
-            Начать игру
-          </button>
+          <div className="flex gap-2">
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                className="px-6 py-4 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold text-lg"
+              >
+                Отмена
+              </button>
+            )}
+            <button
+              onClick={handleStart}
+              disabled={!canStart}
+              className="flex-1 py-4 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-xl transition"
+            >
+              Начать игру
+            </button>
+          </div>
         </div>
       </div>
     </div>

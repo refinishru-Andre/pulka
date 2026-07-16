@@ -12,7 +12,11 @@ const RASPAS_LABEL: Record<string, string> = {
   eightRaspas: '8-мерные распасы · мин 8',
 }
 
-export function Table() {
+interface Props {
+  onBack?: () => void
+}
+
+export function Table({ onBack }: Props = {}) {
   const game = useGameStore((s) => s.game)!
   const undoDeal = useGameStore((s) => s.undoDeal)
   const redoDeal = useGameStore((s) => s.redoDeal)
@@ -136,7 +140,15 @@ export function Table() {
             })()}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+            >
+              ← К партиям
+            </button>
+          )}
           <button
             onClick={undoDeal}
             disabled={game.deals.length === 0}
