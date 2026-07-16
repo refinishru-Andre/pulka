@@ -111,7 +111,7 @@ export function Table() {
   const explanation = explainLastDeal()
 
   return (
-    <div className="min-h-screen p-4 lg:p-8">
+    <div className="min-h-screen p-4 lg:p-8 pb-28 lg:pb-32">
       {/* Заголовок */}
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -301,17 +301,19 @@ export function Table() {
         </div>
       )}
 
-      {/* Кнопка записи сдачи */}
-      <button
-        onClick={() => setDealFormOpen(true)}
-        className="fixed bottom-6 right-6 lg:relative lg:bottom-auto lg:right-auto lg:w-full py-6 bg-green-600 hover:bg-green-500 rounded-2xl text-2xl font-bold shadow-2xl lg:shadow-none px-8"
-      >
-        + Записать сдачу
-      </button>
-
       {dealFormOpen && (
         <DealForm minBid={minBid} raspasState={game.raspasState} onClose={() => setDealFormOpen(false)} />
       )}
+
+      {/* Sticky-футер: кнопка Записать сдачу всегда внизу экрана */}
+      <div className="fixed bottom-0 left-0 right-0 p-3 lg:p-4 bg-slate-900/95 backdrop-blur border-t border-slate-800 z-40">
+        <button
+          onClick={() => setDealFormOpen(true)}
+          className="w-full py-5 bg-green-600 hover:bg-green-500 rounded-2xl text-2xl font-bold shadow-lg"
+        >
+          + Записать сдачу
+        </button>
+      </div>
     </div>
   )
 }
