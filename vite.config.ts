@@ -13,6 +13,14 @@ export default defineConfig({
         clientsClaim: true,
         skipWaiting: true,
         cleanupOutdatedCaches: true,
+        // Не перехватывать запросы к Supabase — они должны идти напрямую в сеть
+        navigateFallbackDenylist: [/^\/auth\//, /^\/rest\//],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/pulka-api-178-154-204-13\.sslip\.io\/.*/,
+            handler: 'NetworkOnly',
+          },
+        ],
       },
       manifest: {
         name: 'Пулька',
