@@ -119,7 +119,7 @@ export function Table({ onBack }: Props = {}) {
       {/* Заголовок */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-3xl font-bold">Пулька</h1>
+          <h1 className="text-3xl font-bold">Людочка</h1>
           <div className="text-base text-slate-400 flex items-center gap-3 flex-wrap mt-1">
             <span>Пуля до {game.poolLimit}</span>
             <span>·</span>

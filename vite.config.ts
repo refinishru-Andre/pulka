@@ -23,8 +23,8 @@ export default defineConfig({
         ],
       },
       manifest: {
-        name: 'Пулька',
-        short_name: 'Пулька',
+        name: 'Людочка',
+        short_name: 'Людочка',
         description: 'Учёт и расчёт игры в преферанс (Питер)',
         theme_color: '#0f172a',
         background_color: '#0f172a',
