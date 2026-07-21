@@ -15,9 +15,10 @@ interface CloudGameItem {
 interface Props {
   onOpenGame: () => void
   onNewGame: () => void
+  onOpenStats: () => void
 }
 
-export function GamesList({ onOpenGame, onNewGame }: Props) {
+export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
   const [games, setGames] = useState<CloudGameItem[]>([])
   const [loading, setLoading] = useState(true)
   const [syncOk, setSyncOk] = useState(false)
@@ -70,7 +71,7 @@ export function GamesList({ onOpenGame, onNewGame }: Props) {
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={refresh}
               disabled={loading}
@@ -78,6 +79,12 @@ export function GamesList({ onOpenGame, onNewGame }: Props) {
               title="Обновить список партий"
             >
               {loading ? '...' : '↻'}
+            </button>
+            <button
+              onClick={onOpenStats}
+              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold"
+            >
+              📊 Статистика
             </button>
             <button
               onClick={onNewGame}
