@@ -105,7 +105,7 @@ export function NewGame({ onCancel, onCreated }: Props = {}) {
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-2xl bg-slate-800 rounded-2xl p-8 shadow-2xl">
         <h1 className="text-3xl font-bold mb-2 text-center">Людочка</h1>
-        <p className="text-slate-400 text-center mb-8">Питер / ленинградка · 3 игрока</p>
+        <p className="text-slate-400 text-center mb-8">Питер · 3 игрока</p>
 
         <div className="space-y-6">
           <div>
