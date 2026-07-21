@@ -23,15 +23,22 @@ export function GamesList({ onOpenGame, onNewGame }: Props) {
   const [syncOk, setSyncOk] = useState(false)
   const loadGame = useGameStore((s) => s.loadGame)
 
+  const refresh = async () => {
+    setLoading(true)
+    const list = await fetchGames()
+    setGames(list)
+    setLoading(false)
+  }
+
   useEffect(() => {
     ;(async () => {
       const user = (await supabase.auth.getUser()).data.user
       setSyncOk(!!user)
-      setLoading(true)
-      const list = await fetchGames()
-      setGames(list)
-      setLoading(false)
+      await refresh()
     })()
+    // Автообновление каждые 15 сек — на случай если игра идёт на другом устройстве
+    const interval = window.setInterval(refresh, 15000)
+    return () => window.clearInterval(interval)
   }, [])
 
   const handleOpen = (item: CloudGameItem) => {
@@ -64,6 +71,14 @@ export function GamesList({ onOpenGame, onNewGame }: Props) {
             )}
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={refresh}
+              disabled={loading}
+              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base"
+              title="Обновить список партий"
+            >
+              {loading ? '...' : '↻'}
+            </button>
             <button
               onClick={onNewGame}
               className="px-5 py-3 bg-green-600 hover:bg-green-500 rounded-lg font-bold"
