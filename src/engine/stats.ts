@@ -115,14 +115,6 @@ function newPlayerStats(name: string): PlayerStats {
   }
 }
 
-// Найти PlayerId в игре по имени
-function playerIdByName(game: GameState, name: string): PlayerId | null {
-  for (const p of PLAYERS) {
-    if (game.players[p] === name) return p
-  }
-  return null
-}
-
 // ============ ГЛАВНЫЙ РАСЧЁТ ============
 
 export function computeStats(games: GameState[]): OverallStats {
