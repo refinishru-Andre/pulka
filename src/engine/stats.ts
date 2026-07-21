@@ -1,7 +1,7 @@
 // Расчёт статистики по завершённым партиям
 // Все метрики — must-have по результатам research
 
-import type { GameState, Deal, PlayerId } from './types'
+import type { GameState, Deal } from './types'
 import { PLAYERS } from './types'
 import { settle } from './settle'
 
