@@ -42,6 +42,8 @@ interface Store {
   redoDeal: () => void
   resetGame: () => void
   recalculate: () => void
+  // Прикрепить текущую локальную игру к облаку (даёт UUID и загружает)
+  attachToCloud: () => Promise<string | null>
 }
 
 const initialGameState = (
@@ -114,6 +116,23 @@ export const useGameStore = create<Store>()(
         if (id) scheduleSync(id, newGame)
       },
       resetGame: () => set({ game: null, gameId: null, redoStack: [] }),
+      attachToCloud: async () => {
+        const g = get().game
+        if (!g) return null
+        // Если уже привязана — возвращаем существующий ID
+        const existingId = get().gameId
+        if (existingId) return existingId
+        // Генерируем UUID, сохраняем и заливаем в облако
+        const id = uuid()
+        set({ gameId: id })
+        try {
+          await uploadGame(id, g)
+          return id
+        } catch (err) {
+          console.error('[attachToCloud] failed:', err)
+          return id // всё равно возвращаем — при следующей сдаче syncScheduler попробует ещё раз
+        }
+      },
       // Пересчитать всё состояние из истории deals[] — на случай изменений движка.
       // Также гарантируем что redoStack инициализирован (после hydration может быть undefined).
       recalculate: () => {

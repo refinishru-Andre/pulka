@@ -11,10 +11,13 @@ type Screen = 'games' | 'newGame' | 'table'
 
 export default function App() {
   const game = useGameStore((s) => s.game)
+  const gameId = useGameStore((s) => s.gameId)
   const recalculate = useGameStore((s) => s.recalculate)
+  const attachToCloud = useGameStore((s) => s.attachToCloud)
   const [user, setUser] = useState<User | null | undefined>(undefined) // undefined = загрузка
   const [skipAuth, setSkipAuth] = useState(false)
   const [screen, setScreen] = useState<Screen>(game ? 'table' : 'games')
+  const [importNotice, setImportNotice] = useState<string | null>(null)
 
   // Пересчёт из истории при загрузке
   useEffect(() => {
@@ -29,6 +32,15 @@ export default function App() {
     })
     return () => sub.subscription.unsubscribe()
   }, [])
+
+  // Автоматически подтягиваем локальную игру в облако при первом входе
+  useEffect(() => {
+    if (user && game && !gameId) {
+      attachToCloud().then((id) => {
+        if (id) setImportNotice('Локальная партия загружена в облако ✓')
+      })
+    }
+  }, [user, game, gameId, attachToCloud])
 
   // Загрузка ещё в процессе
   if (user === undefined) {
@@ -46,14 +58,28 @@ export default function App() {
 
   // Залогинен: показываем список партий или редактор
   if (user) {
+    let content: JSX.Element
     if (screen === 'table' && game) {
-      return <Table onBack={() => setScreen('games')} />
-    }
-    if (screen === 'newGame') {
-      return <NewGame onCancel={() => setScreen('games')} onCreated={() => setScreen('table')} />
+      content = <Table onBack={() => setScreen('games')} />
+    } else if (screen === 'newGame') {
+      content = <NewGame onCancel={() => setScreen('games')} onCreated={() => setScreen('table')} />
+    } else {
+      content = (
+        <GamesList onOpenGame={() => setScreen('table')} onNewGame={() => setScreen('newGame')} />
+      )
     }
     return (
-      <GamesList onOpenGame={() => setScreen('table')} onNewGame={() => setScreen('newGame')} />
+      <>
+        {content}
+        {importNotice && (
+          <div
+            className="fixed top-5 right-5 z-50 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg cursor-pointer"
+            onClick={() => setImportNotice(null)}
+          >
+            {importNotice}
+          </div>
+        )}
+      </>
     )
   }
 
