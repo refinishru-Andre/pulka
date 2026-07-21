@@ -22,8 +22,14 @@ export function Table({ onBack }: Props = {}) {
   const redoDeal = useGameStore((s) => s.redoDeal)
   const redoStack = useGameStore((s) => s.redoStack)
   const resetGame = useGameStore((s) => s.resetGame)
+  const finishGame = useGameStore((s) => s.finishGame)
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmFinish, setConfirmFinish] = useState(false)
+
+  // Партия автозавершена если все пули закрыты
+  const allPoolsClosed = PLAYERS.every((p) => game.pool[p] >= game.poolLimit)
+  const isFinished = allPoolsClosed || game.finishedManually === true
 
   const settlement = settle(game)
   const minBid = minBidFor(game.raspasState)
@@ -164,6 +170,35 @@ export function Table({ onBack }: Props = {}) {
           >
             Вперёд ⟳{redoStack.length > 0 && ` (${redoStack.length})`}
           </button>
+          {!isFinished &&
+            (confirmFinish ? (
+              <>
+                <button
+                  onClick={() => {
+                    finishGame()
+                    setConfirmFinish(false)
+                    onBack?.()
+                  }}
+                  className="px-5 py-3 bg-amber-600 hover:bg-amber-500 rounded-lg text-base font-bold"
+                >
+                  Да, завершить
+                </button>
+                <button
+                  onClick={() => setConfirmFinish(false)}
+                  className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+                >
+                  Отмена
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setConfirmFinish(true)}
+                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+                title="Пометить партию как завершённую"
+              >
+                🏁 Завершить
+              </button>
+            ))}
           {confirmReset ? (
             <>
               <button

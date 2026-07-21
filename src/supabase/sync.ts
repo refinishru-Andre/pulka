@@ -19,6 +19,7 @@ interface CloudGame {
     raspasState: string
     eightRaspasCounter: Record<string, number>
     deals: Deal[]
+    finishedManually?: boolean
   }
   finished: boolean
   finished_at: string | null
@@ -36,6 +37,7 @@ function toCloudState(game: GameState) {
     raspasState: game.raspasState,
     eightRaspasCounter: game.eightRaspasCounter,
     deals: game.deals,
+    finishedManually: game.finishedManually,
     // lastDelta не сохраняем, он вычисляется
   }
 }
@@ -53,6 +55,7 @@ function fromCloud(cloud: CloudGame): GameState {
     raspasState: cloud.state.raspasState as GameState['raspasState'],
     eightRaspasCounter: cloud.state.eightRaspasCounter as GameState['eightRaspasCounter'],
     deals: cloud.state.deals,
+    finishedManually: cloud.state.finishedManually,
   }
 }
 
@@ -66,7 +69,8 @@ export async function uploadGame(
   const user = (await supabase.auth.getUser()).data.user
   if (!user) return // не авторизован — не синхронизируем
 
-  const finished = Object.values(game.pool).every((p) => p >= game.poolLimit)
+  const allClosed = Object.values(game.pool).every((p) => p >= game.poolLimit)
+  const finished = allClosed || game.finishedManually === true
 
   const payload = {
     id: gameId,

@@ -44,6 +44,8 @@ interface Store {
   recalculate: () => void
   // Прикрепить текущую локальную игру к облаку (даёт UUID и загружает)
   attachToCloud: () => Promise<string | null>
+  // Пометить текущую партию как завершённую (прервать вручную)
+  finishGame: () => void
 }
 
 const initialGameState = (
@@ -116,6 +118,14 @@ export const useGameStore = create<Store>()(
         if (id) scheduleSync(id, newGame)
       },
       resetGame: () => set({ game: null, gameId: null, redoStack: [] }),
+      finishGame: () => {
+        const g = get().game
+        if (!g) return
+        const finished: GameState = { ...g, finishedManually: true }
+        set({ game: finished })
+        const id = get().gameId
+        if (id) scheduleSync(id, finished)
+      },
       attachToCloud: async () => {
         const g = get().game
         if (!g) return null
