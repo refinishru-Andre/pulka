@@ -20,13 +20,13 @@ interface Props {
 export function GamesList({ onOpenGame, onNewGame }: Props) {
   const [games, setGames] = useState<CloudGameItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [email, setEmail] = useState<string | null>(null)
+  const [syncOk, setSyncOk] = useState(false)
   const loadGame = useGameStore((s) => s.loadGame)
 
   useEffect(() => {
     ;(async () => {
       const user = (await supabase.auth.getUser()).data.user
-      setEmail(user?.email ?? null)
+      setSyncOk(!!user)
       setLoading(true)
       const list = await fetchGames()
       setGames(list)
@@ -56,7 +56,12 @@ export function GamesList({ onOpenGame, onNewGame }: Props) {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">Мои партии</h1>
-            {email && <div className="text-sm text-slate-400 mt-1">{email}</div>}
+            {syncOk && (
+              <div className="text-sm text-green-400 mt-1 flex items-center gap-1">
+                <span>●</span>
+                <span>Синхронизировано с облаком</span>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <button
@@ -65,7 +70,7 @@ export function GamesList({ onOpenGame, onNewGame }: Props) {
             >
               + Новая партия
             </button>
-            {email && (
+            {syncOk && (
               <button
                 onClick={handleLogout}
                 className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm"
