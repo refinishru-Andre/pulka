@@ -10,16 +10,18 @@ export function nextClockwise(p: PlayerId): PlayerId {
   return PLAYERS[(idx + 1) % PLAYERS.length]
 }
 
-// Определить новую первую руку после сдачи с учётом «первая рука остаётся» на 8-мерных.
-// Правило Андрея: на 8-мерных рука ОСТАЁТСЯ только при ремизе 8+ или пойманном мизере.
-// Во всех остальных случаях (уход без 3, полвиста, сыгранная 8+/мизер, обычная 6/7 в normal и т.д.) — рука переходит.
+// Определить новую первую руку. Правило Андрея (v2):
+// На 8-мерных распасах рука ОСТАЁТСЯ при ЛЮБОЙ несыгранной заказанной игре/мизере:
+//   - ремиз 8+
+//   - пойманный мизер
+//   - уход без 3 (это тоже несыгранная игра)
+// Во всех остальных случаях (распас, сыгранная игра/мизер) — рука переходит по часовой.
 export function nextFirstHand(
   state: GameState,
   deal: Deal,
   _newRaspasState: RaspasState,
 ): PlayerId {
   if (state.raspasState === 'eightRaspas') {
-    // Ремиз заказанной 8+ игры
     if (
       deal.type === 'game' &&
       deal.contract.kind === 'game' &&
@@ -28,12 +30,12 @@ export function nextFirstHand(
     ) {
       return state.firstHand
     }
-    // Пойманный мизер (это ремиз старшей игры)
     if (deal.type === 'misere' && deal.playerTricks > 0) {
       return state.firstHand
     }
-    // Уход без 3 — тоже несыгранная игра, но по правилу Андрея → рука ПЕРЕХОДИТ
-    // Всё остальное — переход
+    if (deal.type === 'giveup') {
+      return state.firstHand
+    }
   }
   return nextClockwise(state.firstHand)
 }

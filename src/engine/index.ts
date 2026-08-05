@@ -8,7 +8,13 @@ export * from './raspas'
 
 import type { Deal, GameState, PlayerId, DealDelta } from './types'
 import { calcDeal } from './calc'
-import { nextRaspasState, nextFirstHand, updateEightCounter, nextClockwise } from './raspas'
+import {
+  nextRaspasState,
+  nextFirstHand,
+  updateEightCounter,
+  nextClockwise,
+  isEightRaspasFullCircle,
+} from './raspas'
 import { PLAYERS } from './types'
 import { POOL_COST, MISERE_POOL_COST } from './rules'
 
@@ -81,9 +87,16 @@ export function applyDeal(state: GameState, deal: Deal): GameState {
     newWhists[w.from][w.to] += w.amount
   })
 
-  const newRaspas = nextRaspasState(state, deal)
+  let newRaspas = nextRaspasState(state, deal)
   const newFirstHand = nextFirstHand(state, deal, newRaspas)
-  const newCounter = updateEightCounter(state, newRaspas, state.firstHand)
+  let newCounter = updateEightCounter(state, newRaspas, state.firstHand)
+
+  // «Полный круг» на 8-мерных: как только все игроки побывали первой рукой хотя бы 1 раз —
+  // эскалация сбрасывается, следующая сдача играется как обычная (мин 6).
+  if (newRaspas === 'eightRaspas' && isEightRaspasFullCircle(newCounter)) {
+    newRaspas = 'normal'
+    newCounter = { A: 0, B: 0, C: 0 }
+  }
 
   return {
     ...state,

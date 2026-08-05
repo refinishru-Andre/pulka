@@ -588,6 +588,72 @@ describe('nextRaspasState + nextFirstHand', () => {
   })
 })
 
+describe('8-мерные распасы: уход без 3 и полный круг', () => {
+  it('уход без 3 на 8-мерных → первая рука ОСТАЁТСЯ', async () => {
+    const { applyDeal } = await import('./index')
+    const state: GameState = {
+      ...initState(),
+      raspasState: 'eightRaspas',
+      firstHand: 'B',
+      eightRaspasCounter: { A: 0, B: 1, C: 0 },
+    }
+    const deal: Deal = {
+      type: 'giveup',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'B',
+      contract: { kind: 'game', level: 8, suit: 'S' },
+    }
+    const newState = applyDeal(state, deal)
+    expect(newState.firstHand).toBe('B') // осталась
+    expect(newState.raspasState).toBe('eightRaspas') // тоже осталось
+  })
+
+  it('распас в 8-мерных → все побывали первой рукой → выход в normal', async () => {
+    const { applyDeal } = await import('./index')
+    // Была A первой рукой в 8-мерных. Уже A=1, B=1 (побывали). C только сейчас.
+    const state: GameState = {
+      ...initState(),
+      raspasState: 'eightRaspas',
+      firstHand: 'C',
+      eightRaspasCounter: { A: 1, B: 1, C: 0 },
+    }
+    const deal: Deal = {
+      type: 'raspas',
+      dealer: 'B',
+      firstHand: 'C',
+      level: 3,
+      tricks: { A: 3, B: 3, C: 4 },
+    }
+    const newState = applyDeal(state, deal)
+    // C побывал первой рукой в этой сдаче → counter стал A=1, B=1, C=1 → полный круг → normal
+    expect(newState.raspasState).toBe('normal')
+    expect(newState.eightRaspasCounter).toEqual({ A: 0, B: 0, C: 0 })
+  })
+
+  it('распас в 8-мерных → не полный круг → остаёмся в 8-мерных', async () => {
+    const { applyDeal } = await import('./index')
+    const state: GameState = {
+      ...initState(),
+      raspasState: 'eightRaspas',
+      firstHand: 'A',
+      eightRaspasCounter: { A: 0, B: 0, C: 0 }, // только что зашли
+    }
+    const deal: Deal = {
+      type: 'raspas',
+      dealer: 'C',
+      firstHand: 'A',
+      level: 3,
+      tricks: { A: 4, B: 3, C: 3 },
+    }
+    const newState = applyDeal(state, deal)
+    expect(newState.raspasState).toBe('eightRaspas') // остались
+    expect(newState.eightRaspasCounter.A).toBe(1) // A побывал
+    expect(newState.eightRaspasCounter.B).toBe(0)
+    expect(newState.eightRaspasCounter.C).toBe(0)
+  })
+})
+
 describe('8-мерные распасы: счётчик и полный круг', () => {
   it('вход в 8-мерные → счётчик первой руки = 1, остальные 0', () => {
     const state: GameState = { ...initState(), raspasState: 'afterSecond', firstHand: 'A' }
