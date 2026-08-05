@@ -146,7 +146,6 @@ export const useGameStore = create<Store>()(
       // Пересчитать всё состояние из истории deals[] — на случай изменений движка.
       // Также гарантируем что redoStack инициализирован (после hydration может быть undefined).
       recalculate: () => {
-        // Инициализация redoStack если undefined (после hydration старой версии)
         if (!get().redoStack) set({ redoStack: [] })
         const g = get().game
         if (!g || g.deals.length === 0) return
@@ -165,7 +164,11 @@ export const useGameStore = create<Store>()(
           eightRaspasCounter: { A: 0, B: 0, C: 0 },
           deals: [],
         }
-        set({ game: deals.reduce(applyDeal, initial) })
+        const recalculated = deals.reduce(applyDeal, initial)
+        set({ game: recalculated })
+        // Автопуш пересчитанного состояния в облако (если игра привязана к облаку)
+        const id = get().gameId
+        if (id) scheduleSync(id, recalculated)
       },
     }),
     {
