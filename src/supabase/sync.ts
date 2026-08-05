@@ -4,6 +4,7 @@
 
 import { supabase } from './client'
 import type { GameState, Deal } from '../engine/types'
+import { applyDeal } from '../engine'
 
 interface CloudGame {
   id: string
@@ -101,11 +102,32 @@ export async function fetchGames(): Promise<{ id: string; game: GameState; finis
     console.error('[sync] fetch failed:', error)
     return []
   }
-  return (data as CloudGame[]).map((c) => ({
-    id: c.id,
-    game: fromCloud(c),
-    finished: c.finished,
-  }))
+  return (data as CloudGame[]).map((c) => {
+    const raw = fromCloud(c)
+    // Пересчитываем state из deals — cloud state мог быть с багами старой логики
+    const game = raw.deals.length > 0 ? recomputeState(raw) : raw
+    return { id: c.id, game, finished: c.finished }
+  })
+}
+
+// Пересчитать state из deals[] — гарантирует что pool/mount/whists соответствуют актуальной логике движка
+function recomputeState(game: GameState): GameState {
+  const initial: GameState = {
+    ...game,
+    pool: { A: 0, B: 0, C: 0 },
+    mount: { A: 0, B: 0, C: 0 },
+    whists: {
+      A: { A: 0, B: 0, C: 0 },
+      B: { A: 0, B: 0, C: 0 },
+      C: { A: 0, B: 0, C: 0 },
+    },
+    firstHand: game.deals[0].firstHand,
+    raspasState: 'normal',
+    eightRaspasCounter: { A: 0, B: 0, C: 0 },
+    deals: [],
+    lastDelta: undefined,
+  }
+  return game.deals.reduce(applyDeal, initial)
 }
 
 // Удалить игру

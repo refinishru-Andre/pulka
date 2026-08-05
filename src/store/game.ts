@@ -85,7 +85,30 @@ export const useGameStore = create<Store>()(
         scheduleSync(id, game)
       },
       loadGame: (id, game) => {
-        set({ game, gameId: id, redoStack: [], viewIndex: null })
+        // Пересчитываем state из deals по актуальной логике движка (на случай изменения правил).
+        // Загруженный из облака state мог быть с багами — deals[] это единственный источник истины.
+        if (game.deals.length > 0) {
+          const initial: GameState = {
+            ...game,
+            pool: { A: 0, B: 0, C: 0 },
+            mount: { A: 0, B: 0, C: 0 },
+            whists: {
+              A: { A: 0, B: 0, C: 0 },
+              B: { A: 0, B: 0, C: 0 },
+              C: { A: 0, B: 0, C: 0 },
+            },
+            firstHand: game.deals[0].firstHand,
+            raspasState: 'normal',
+            eightRaspasCounter: { A: 0, B: 0, C: 0 },
+            deals: [],
+            lastDelta: undefined,
+          }
+          const recalculated = game.deals.reduce(applyDeal, initial)
+          set({ game: recalculated, gameId: id, redoStack: [], viewIndex: null })
+          scheduleSync(id, recalculated)
+        } else {
+          set({ game, gameId: id, redoStack: [], viewIndex: null })
+        }
       },
       addDeal: (deal) => {
         const g = get().game
