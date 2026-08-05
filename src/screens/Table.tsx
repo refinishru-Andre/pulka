@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useGameStore } from '../store/game'
-import { settle, minBidFor, nextClockwise } from '../engine'
+import { settle, minBidFor } from '../engine'
 import { PLAYERS } from '../engine/types'
 import type { PlayerId } from '../engine/types'
 import { DealForm } from './DealForm'
