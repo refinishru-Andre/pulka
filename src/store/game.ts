@@ -5,6 +5,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Deal, GameState, PlayerId } from '../engine/types'
 import { applyDeal, undoLastDeal } from '../engine'
 import { uploadGame } from '../supabase/sync'
+import { PLAYERS } from '../engine/types'
 
 // Версия логики расчёта. Инкрементируется при изменении формул — вызывает пересчёт всех игр.
 const CALC_VERSION = 2
@@ -30,7 +31,8 @@ function scheduleSync(gameId: string, game: GameState) {
 interface Store {
   game: GameState | null
   gameId: string | null // UUID текущей игры для облачной синхронизации
-  redoStack: Deal[]
+  redoStack: Deal[] // (устарело — сохраняем для миграции старых сессий)
+  viewIndex: number | null // локальный курсор просмотра истории (null = смотрим финал). НЕ синхронизируется.
   newGame: (params: {
     players: Record<PlayerId, string>
     poolLimit: number
@@ -38,13 +40,13 @@ interface Store {
   }) => void
   loadGame: (id: string, game: GameState) => void
   addDeal: (deal: Deal) => void
-  undoDeal: () => void
-  redoDeal: () => void
+  viewPrev: () => void // просмотр: назад
+  viewNext: () => void // просмотр: вперёд
+  viewReset: () => void // сброс просмотра к финалу
+  deleteLastDeal: () => void // РЕАЛЬНОЕ удаление последней сдачи (с подтверждением в UI)
   resetGame: () => void
   recalculate: () => void
-  // Прикрепить текущую локальную игру к облаку (даёт UUID и загружает)
   attachToCloud: () => Promise<string | null>
-  // Пометить текущую партию как завершённую (прервать вручную)
   finishGame: () => void
 }
 
@@ -75,49 +77,56 @@ export const useGameStore = create<Store>()(
       game: null,
       gameId: null,
       redoStack: [],
+      viewIndex: null,
       newGame: ({ players, poolLimit, firstHand }) => {
         const id = uuid()
         const game = initialGameState(players, poolLimit, firstHand)
-        set({ game, gameId: id, redoStack: [] })
+        set({ game, gameId: id, redoStack: [], viewIndex: null })
         scheduleSync(id, game)
       },
       loadGame: (id, game) => {
-        set({ game, gameId: id, redoStack: [] })
+        set({ game, gameId: id, redoStack: [], viewIndex: null })
       },
       addDeal: (deal) => {
         const g = get().game
         if (!g) return
+        // Блокируем добавление на завершённой партии или во время просмотра
+        const allClosed = PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
+        if (allClosed || g.finishedManually) return
+        if (get().viewIndex !== null) return
         const newGame = applyDeal(g, deal)
-        set({ game: newGame, redoStack: [] })
+        set({ game: newGame, redoStack: [], viewIndex: null })
         const id = get().gameId
         if (id) scheduleSync(id, newGame)
       },
-      undoDeal: () => {
+      viewPrev: () => {
+        const g = get().game
+        if (!g) return
+        const cur = get().viewIndex ?? g.deals.length
+        const next = Math.max(0, cur - 1)
+        set({ viewIndex: next === g.deals.length ? null : next })
+      },
+      viewNext: () => {
+        const g = get().game
+        if (!g) return
+        const cur = get().viewIndex
+        if (cur === null) return // уже на финале
+        const next = cur + 1
+        set({ viewIndex: next >= g.deals.length ? null : next })
+      },
+      viewReset: () => set({ viewIndex: null }),
+      deleteLastDeal: () => {
         const g = get().game
         if (!g || g.deals.length === 0) return
-        const lastDeal = g.deals[g.deals.length - 1]
+        // Блокируем на завершённой партии
+        const allClosed = PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
+        if (allClosed || g.finishedManually) return
         const newGame = undoLastDeal(g)
-        set({
-          game: newGame,
-          redoStack: [...get().redoStack, lastDeal],
-        })
+        set({ game: newGame, viewIndex: null })
         const id = get().gameId
         if (id) scheduleSync(id, newGame)
       },
-      redoDeal: () => {
-        const stack = get().redoStack
-        const g = get().game
-        if (!g || stack.length === 0) return
-        const deal = stack[stack.length - 1]
-        const newGame = applyDeal(g, deal)
-        set({
-          game: newGame,
-          redoStack: stack.slice(0, -1),
-        })
-        const id = get().gameId
-        if (id) scheduleSync(id, newGame)
-      },
-      resetGame: () => set({ game: null, gameId: null, redoStack: [] }),
+      resetGame: () => set({ game: null, gameId: null, redoStack: [], viewIndex: null }),
       finishGame: () => {
         const g = get().game
         if (!g) return
