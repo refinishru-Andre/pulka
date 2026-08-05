@@ -10,30 +10,31 @@ export function nextClockwise(p: PlayerId): PlayerId {
   return PLAYERS[(idx + 1) % PLAYERS.length]
 }
 
-// Определить новую первую руку после сдачи с учётом «первая рука остаётся» на 8-мерных
+// Определить новую первую руку после сдачи с учётом «первая рука остаётся» на 8-мерных.
+// Правило Андрея: на 8-мерных рука ОСТАЁТСЯ только при ремизе 8+ или пойманном мизере.
+// Во всех остальных случаях (уход без 3, полвиста, сыгранная 8+/мизер, обычная 6/7 в normal и т.д.) — рука переходит.
 export function nextFirstHand(
   state: GameState,
   deal: Deal,
   _newRaspasState: RaspasState,
 ): PlayerId {
-  // На 8-мерных при ремизе 8+ или мизера — первая рука ОСТАЁТСЯ
-  if (state.raspasState === 'eightRaspas' && deal.type === 'game') {
-    if (deal.contract.kind === 'game' && deal.contract.level >= 8 && deal.playerTricks < deal.contract.level) {
-      // Ремиз 8+ на 8-мерных → первая рука остаётся
+  if (state.raspasState === 'eightRaspas') {
+    // Ремиз заказанной 8+ игры
+    if (
+      deal.type === 'game' &&
+      deal.contract.kind === 'game' &&
+      deal.contract.level >= 8 &&
+      deal.playerTricks < deal.contract.level
+    ) {
       return state.firstHand
     }
+    // Пойманный мизер (это ремиз старшей игры)
+    if (deal.type === 'misere' && deal.playerTricks > 0) {
+      return state.firstHand
+    }
+    // Уход без 3 — тоже несыгранная игра, но по правилу Андрея → рука ПЕРЕХОДИТ
+    // Всё остальное — переход
   }
-  if (state.raspasState === 'eightRaspas' && deal.type === 'misere' && deal.playerTricks > 0) {
-    // Ремиз мизера на 8-мерных → первая рука остаётся
-    return state.firstHand
-  }
-  if (state.raspasState === 'eightRaspas' && deal.type === 'giveup') {
-    // Уход без 3 на 8-мерных ??? — трактуем как несостоявшуюся игру, первая рука остаётся
-    // (обсудить с Андреем, отдельный вопрос — но логичнее так)
-    return state.firstHand
-  }
-  // Если состояние вышло из 8-мерных (successful 8+ или mizer) — новая первая рука по часовой
-  // Во всех остальных случаях — по часовой стрелке
   return nextClockwise(state.firstHand)
 }
 
