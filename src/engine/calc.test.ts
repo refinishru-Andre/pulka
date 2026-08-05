@@ -512,6 +512,36 @@ describe('nextRaspasState + nextFirstHand', () => {
     expect(nextFirstHand(state, deal, newState)).toBe('B') // остаётся B
   })
 
+  it('7-я сыграна в состоянии afterFirst → возврат в normal', () => {
+    const state: GameState = { ...initState(), raspasState: 'afterFirst', firstHand: 'B' }
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'B',
+      contract: { kind: 'game', level: 7, suit: 'S' },
+      playerTricks: 7, // сыграл
+      vistersTricks: { A: 2, B: 0, C: 1 },
+      vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
+    }
+    expect(nextRaspasState(state, deal)).toBe('normal')
+  })
+
+  it('7-я ремиз в состоянии afterFirst → остаётся afterFirst', () => {
+    const state: GameState = { ...initState(), raspasState: 'afterFirst', firstHand: 'B' }
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'B',
+      contract: { kind: 'game', level: 7, suit: 'S' },
+      playerTricks: 6, // недобор
+      vistersTricks: { A: 2, B: 0, C: 2 },
+      vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
+    }
+    expect(nextRaspasState(state, deal)).toBe('afterFirst')
+  })
+
   it('успешная 8-мерная на 8-мерных → выход в normal + первая рука сдвигается', () => {
     const state: GameState = { ...initState(), raspasState: 'eightRaspas', firstHand: 'B' }
     const deal: Deal = {

@@ -1,9 +1,15 @@
 import { useState } from 'react'
 import { useGameStore } from '../store/game'
-import { settle, minBidFor } from '../engine'
+import { settle, minBidFor, nextClockwise } from '../engine'
 import { PLAYERS } from '../engine/types'
 import type { PlayerId } from '../engine/types'
 import { DealForm } from './DealForm'
+
+// Сдающий = предыдущий по часовой стрелке от первой руки
+function prevClockwise(p: PlayerId): PlayerId {
+  const idx = PLAYERS.indexOf(p)
+  return PLAYERS[(idx + PLAYERS.length - 1) % PLAYERS.length]
+}
 
 const RASPAS_LABEL: Record<string, string> = {
   normal: 'Обычная игра · мин 6',
@@ -30,6 +36,9 @@ export function Table({ onBack }: Props = {}) {
   // Партия автозавершена если все пули закрыты
   const allPoolsClosed = PLAYERS.every((p) => game.pool[p] >= game.poolLimit)
   const isFinished = allPoolsClosed || game.finishedManually === true
+
+  // Сдающий = предыдущий по часовой от firstHand
+  const dealer = prevClockwise(game.firstHand)
 
   const settlement = settle(game)
   const minBid = minBidFor(game.raspasState)
@@ -253,7 +262,7 @@ export function Table({ onBack }: Props = {}) {
             <div key={p} className={`bg-slate-800 rounded-2xl p-6 ${playerColor(p)} ${changedClass}`}>
               <div className="flex items-center justify-between mb-4 gap-2">
                 <div className="text-2xl font-bold truncate">{game.players[p]}</div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
                   <span
                     className={`text-3xl font-extrabold ${
                       settlement.net[p] > 0
@@ -269,6 +278,11 @@ export function Table({ onBack }: Props = {}) {
                   {p === game.firstHand && (
                     <span className="text-sm bg-yellow-500 text-slate-900 px-2.5 py-1 rounded font-bold">
                       1 РУКА
+                    </span>
+                  )}
+                  {p === dealer && (
+                    <span className="text-sm bg-slate-600 text-slate-100 px-2.5 py-1 rounded font-semibold">
+                      СДАЁТ
                     </span>
                   )}
                 </div>

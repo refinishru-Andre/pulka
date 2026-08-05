@@ -47,16 +47,12 @@ export function nextRaspasState(state: GameState, deal: Deal): RaspasState {
     return 'eightRaspas' // остаёмся в 8-мерных при повторном распасе
   }
 
-  // Игра или мизер — если в состоянии эскалации, проверяем возврат в normal
+  // Игра — любая УСПЕШНО сыгранная возвращает в normal.
+  // Ремиз — состояние не меняется (остаёмся в эскалации).
   if (deal.type === 'game') {
-    if (deal.contract.kind === 'game' && deal.contract.level >= 8) {
-      const success = deal.playerTricks >= deal.contract.level
-      if (success) return 'normal' // успешно сыграна 8+ → выход в чистую
-      // Ремиз 8+ в состоянии 2 или 8-мерных — не выходим
-      return state.raspasState
-    }
-    // Игра 6/7 в состоянии эскалации не сбрасывает — но по конвенции такие игры и не заказываются на 8+
-    // Если по каким-то причинам она сыграна — принимаем что состояние не меняется
+    if (deal.contract.kind !== 'game') return state.raspasState
+    const success = deal.playerTricks >= deal.contract.level
+    if (success) return 'normal'
     return state.raspasState
   }
   if (deal.type === 'misere') {
