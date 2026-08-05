@@ -17,7 +17,8 @@ export default function App() {
   const attachToCloud = useGameStore((s) => s.attachToCloud)
   const [user, setUser] = useState<User | null | undefined>(undefined) // undefined = загрузка
   const [skipAuth, setSkipAuth] = useState(false)
-  const [screen, setScreen] = useState<Screen>(game ? 'table' : 'games')
+  // При старте всегда список партий — пользователь сам выбирает что открыть
+  const [screen, setScreen] = useState<Screen>('games')
   const [importNotice, setImportNotice] = useState<string | null>(null)
 
   // Пересчёт из истории при загрузке
