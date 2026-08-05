@@ -178,6 +178,8 @@ export const useGameStore = create<Store>()(
       // Пересчитать всё состояние из истории deals[] — на случай изменений движка.
       // Также гарантируем что redoStack инициализирован (после hydration может быть undefined).
       recalculate: () => {
+        // ВАЖНО: НЕ пушим в облако — иначе локальные данные могут затереть свежие облачные.
+        // Облако обновляется только при явных действиях (addDeal, deleteLastDeal, finishGame, loadGame).
         if (!get().redoStack) set({ redoStack: [] })
         const g = get().game
         if (!g || g.deals.length === 0) return
@@ -195,12 +197,10 @@ export const useGameStore = create<Store>()(
           raspasState: 'normal',
           eightRaspasCounter: { A: 0, B: 0, C: 0 },
           deals: [],
+          lastDelta: undefined,
         }
         const recalculated = deals.reduce(applyDeal, initial)
         set({ game: recalculated })
-        // Автопуш пересчитанного состояния в облако (если игра привязана к облаку)
-        const id = get().gameId
-        if (id) scheduleSync(id, recalculated)
       },
     }),
     {
