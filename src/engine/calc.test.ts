@@ -699,17 +699,15 @@ describe('Переполнение пули (передача по часово�
     expect(newState.whists.A.B).toBe(10)
   })
 
-  it('A переполнил на 7 при закрытых Д и почти закрытом О → 1 к О, 6 списывается с горы А', async () => {
+  it('A переполнил на 7 при закрытых Д и почти закрытом О → 1 к О, 6 остаток × 2 = 12 с горы А', async () => {
     const { applyDeal } = await import('./index')
     const state = initState()
     state.poolLimit = 11
-    state.pool = { A: 11, B: 11, C: 10 } // A и B закрыты, C почти закрыт
-    state.mount = { A: 100, B: 0, C: 0 } // у A большая гора
-    // A играет 9♥ и сыграл → пуля +8, но A не может (закрыт).
-    // Всё уходит в перекрытие: B закрыт (0), C принимает 1, остаток 7.
-    // Стоп: A сам получил +8, но он закрыт. Тогда excess = 8 у A.
-    // Но у нас передача. C может принять 1 (стал 11). B пропущен (закрыт). Остаток 7.
-    // По правилу: 7 × 2 × 8 = 112 списывается с горы A.
+    state.pool = { A: 11, B: 11, C: 10 }
+    state.mount = { A: 100, B: 0, C: 0 }
+    // A играет 9♥ и сыграл → пуля +8, все нужно передать/списать.
+    // C принимает 1 (стал 11). Остаток 7. По правилу: 7 × 2 = 14 с горы А.
+    // A: 100 - 14 = 86
     const deal: Deal = {
       type: 'game',
       dealer: 'C',
@@ -723,11 +721,10 @@ describe('Переполнение пули (передача по часово�
     const newState = applyDeal(state, deal)
     expect(newState.pool.A).toBe(11)
     expect(newState.pool.B).toBe(11)
-    expect(newState.pool.C).toBe(11) // 10 + 1
-    // 7 очков остатка × 2 × 8 = 112 с горы A: 100 - 112 = -12
-    expect(newState.mount.A).toBe(-12)
-    // C пишет 10 вистов на A за 1 очко
-    expect(newState.whists.C.A).toBeGreaterThanOrEqual(10)
+    expect(newState.pool.C).toBe(11)
+    expect(newState.mount.A).toBe(86) // 100 − 14
+    // Остальные висты за 1 переданное очко = A пишет 10 на C (в свою пользу)
+    expect(newState.whists.A.C).toBeGreaterThanOrEqual(10)
   })
 
   it('A переполнил на 2, B уже закрыт — 2 очка передаются C через B', async () => {

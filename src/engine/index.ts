@@ -16,17 +16,8 @@ import {
   isEightRaspasFullCircle,
 } from './raspas'
 import { PLAYERS } from './types'
-import { POOL_COST, MISERE_POOL_COST } from './rules'
-
 // Правило Андрея: 1 очко переданной пули = 10 вистов
 const POOL_TRANSFER_VISTS_PER_POINT = 10
-
-// Стоимость игры в пулю (для правила «остаток пули списывается с горы играющего»)
-function poolCostForDeal(deal: Deal): number {
-  if (deal.type === 'game' && deal.contract.kind === 'game') return POOL_COST[deal.contract.level]
-  if (deal.type === 'misere') return MISERE_POOL_COST
-  return 0
-}
 
 // Полная дельта: базовый calcDeal + учёт перекрытия пули (для отображения и применения)
 export function calcDealFull(state: GameState, deal: Deal): DealDelta {
@@ -58,12 +49,10 @@ export function calcDealFull(state: GameState, deal: Deal): DealDelta {
       next = nextClockwise(next)
     }
     // Если после передачи остался излишек — все игроки закрыты.
-    // По правилу Андрея: за каждое несданное очко списывается 2 × стоимость игры с горы игрока.
+    // Правило: 1 очко пули = 2 очка списанной горы (эквивалент 20 вистов).
+    // Итог: остаток * 2 в минус горы.
     if (excess > 0) {
-      const cost = poolCostForDeal(deal)
-      if (cost > 0) {
-        delta.mount[p] -= excess * 2 * cost
-      }
+      delta.mount[p] -= excess * 2
     }
   }
   return delta
