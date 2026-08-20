@@ -7,8 +7,6 @@ interface Props {
   onBack: () => void
 }
 
-const SUIT_ICON: Record<string, string> = { S: '♠', C: '♣', D: '♦', H: '♥' }
-
 export function Stats({ onBack }: Props) {
   const [games, setGames] = useState<GameState[]>([])
   const [loading, setLoading] = useState(true)
@@ -248,17 +246,12 @@ function PlayerDetail({ p }: { p: PlayerStats }) {
           )}
         </div>
 
-        {/* БК */}
+        {/* Сталинград — единственная игра, где масть имеет значение */}
         <div className="bg-slate-900 rounded-lg p-4">
-          <div className="text-xs text-slate-500 uppercase mb-2">БК-игры</div>
-          <div className="text-2xl font-bold mb-1">
-            {p.ntOrders.played}
-            <span className="text-sm text-slate-500 ml-2">из {p.ntOrders.total}</span>
-          </div>
-          <div className="text-sm text-green-400">
-            {p.ntOrders.total > 0
-              ? `${(p.ntOrders.successRate * 100).toFixed(0)}% сыгранных`
-              : 'не заказывал'}
+          <div className="text-xs text-slate-500 uppercase mb-2">Сталинград 6♠</div>
+          <div className="text-2xl font-bold mb-1">{p.stalingrads}</div>
+          <div className="text-sm text-slate-500">
+            {p.stalingrads > 0 ? 'заказывал' : 'не заказывал'}
           </div>
         </div>
 
@@ -322,30 +315,6 @@ function PlayerDetail({ p }: { p: PlayerStats }) {
         </div>
       </div>
 
-      {/* По мастям */}
-      <div>
-        <div className="text-sm text-slate-400 mb-2 uppercase font-semibold">По мастям</div>
-        <div className="grid grid-cols-4 gap-2">
-          {(['S', 'C', 'D', 'H'] as const).map((suit) => {
-            const o = p.suitOrders[suit]
-            const redSuit = suit === 'D' || suit === 'H'
-            return (
-              <div key={suit} className="bg-slate-900 rounded-lg p-3 text-center">
-                <div className={`text-2xl mb-1 ${redSuit ? 'text-red-400' : 'text-slate-200'}`}>
-                  {SUIT_ICON[suit]}
-                </div>
-                <div className="text-lg font-bold">
-                  {o.played}
-                  <span className="text-xs text-slate-500 ml-1">/{o.total}</span>
-                </div>
-                <div className="text-xs text-slate-500">
-                  {o.total > 0 ? `${(o.successRate * 100).toFixed(0)}%` : '—'}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
     </div>
   )
 }

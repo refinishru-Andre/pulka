@@ -27,8 +27,7 @@ export interface PlayerStats {
   totalDeals: number // всего сдач в партиях с этим игроком
   vpd: number // vists per deal = totalVists / totalDeals
   ordersByLevel: Record<6 | 7 | 8 | 9 | 10, OrderStats>
-  ntOrders: OrderStats // БК-игры
-  suitOrders: Record<'S' | 'C' | 'D' | 'H', OrderStats> // по мастям
+  stalingrads: number // сколько раз играл 6♠ (Сталинград)
   miseres: {
     total: number
     played: number
@@ -97,13 +96,7 @@ function newPlayerStats(name: string): PlayerStats {
       9: emptyOrderStats(),
       10: emptyOrderStats(),
     },
-    ntOrders: emptyOrderStats(),
-    suitOrders: {
-      S: emptyOrderStats(),
-      C: emptyOrderStats(),
-      D: emptyOrderStats(),
-      H: emptyOrderStats(),
-    },
+    stalingrads: 0,
     miseres: { total: 0, played: 0, caught: 0, successRate: 0 },
     vist: { total: 0, passed: 0, half: 0 },
     raspas: { total: 0, avgTricks: 0, eightMerCount: 0, zeroTricksCount: 0 },
@@ -222,11 +215,6 @@ export function computeStats(games: GameState[]): OverallStats {
       if (o.played > 0) o.avgOverbid = o.avgOverbid / o.played
       if (o.remise > 0) o.avgUnderbid = o.avgUnderbid / o.remise
     }
-    for (const suit of ['S', 'C', 'D', 'H'] as const) {
-      const o = ps.suitOrders[suit]
-      o.successRate = o.total > 0 ? o.played / o.total : 0
-    }
-    ps.ntOrders.successRate = ps.ntOrders.total > 0 ? ps.ntOrders.played / ps.ntOrders.total : 0
     ps.miseres.successRate = ps.miseres.total > 0 ? ps.miseres.played / ps.miseres.total : 0
     if (ps.raspas.total > 0) ps.raspas.avgTricks = ps.raspas.avgTricks / ps.raspas.total
   }
@@ -260,17 +248,8 @@ function processDeal(deal: Deal, game: GameState, players: Record<string, Player
       orderStats.avgUnderbid += level - deal.playerTricks
     }
 
-    // По масти
-    if (suit === 'NT') {
-      ps.ntOrders.total++
-      if (success) ps.ntOrders.played++
-      else ps.ntOrders.remise++
-    } else {
-      const so = ps.suitOrders[suit]
-      so.total++
-      if (success) so.played++
-      else so.remise++
-    }
+    // Масть больше не пишем: на расчёт она не влияет. Считаем только Сталинград (6♠)
+    if (level === 6 && suit === 'S') ps.stalingrads++
 
     // Учёт вистующих
     for (const vp of PLAYERS) {

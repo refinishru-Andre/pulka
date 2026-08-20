@@ -112,15 +112,20 @@ export function Table({ onBack }: Props = {}) {
     )
   }
 
+  // Подпись заказа. Масть показываем только у Сталинграда (6♠) — в остальных играх
+  // она ни на что не влияет и больше не записывается.
+  const contractLabel = (c: { level: number; suit?: string }): string =>
+    c.level === 6 && c.suit === 'S' ? '6♠ (Сталинград)' : String(c.level)
+
   // Расшифровка последней сдачи текстом
   const explainLastDeal = (): string[] => {
     if (!lastDeal || !lastDelta) return []
     const lines: string[] = []
     if (lastDeal.type === 'game' && lastDeal.contract.kind === 'game') {
-      const level = lastDeal.contract.level
-      const suit = { S: '♠', C: '♣', D: '♦', H: '♥', NT: 'БК' }[lastDeal.contract.suit]
       const player = game.players[lastDeal.player]
-      lines.push(`${player} играл ${level}${suit}, взял ${lastDeal.playerTricks}.`)
+      lines.push(
+        `${player} играл ${contractLabel(lastDeal.contract)}, взял ${lastDeal.playerTricks}.`,
+      )
       const vs = PLAYERS.filter((p) => p !== lastDeal.player)
       vs.forEach((v) => {
         const decision = lastDeal.vistDecisions[v]
@@ -138,8 +143,9 @@ export function Table({ onBack }: Props = {}) {
       const levelName = lastDeal.level === 1 ? '1-й' : lastDeal.level === 2 ? '2-й' : '8-мерный'
       lines.push(`Распас ${levelName}: ` + PLAYERS.map((p) => `${game.players[p]}=${lastDeal.tricks[p]}`).join(', '))
     } else if (lastDeal.type === 'giveup' && lastDeal.contract.kind === 'game') {
-      const suit = { S: '♠', C: '♣', D: '♦', H: '♥', NT: 'БК' }[lastDeal.contract.suit]
-      lines.push(`${game.players[lastDeal.player]} ушёл без 3 на ${lastDeal.contract.level}${suit}.`)
+      lines.push(
+        `${game.players[lastDeal.player]} ушёл без 3 на ${contractLabel(lastDeal.contract)}.`,
+      )
     }
     // Расчёт
     lines.push('') // разделитель
@@ -337,34 +343,45 @@ export function Table({ onBack }: Props = {}) {
           const poolD = lastDelta?.pool[p] ?? 0
           const mountD = lastDelta?.mount[p] ?? 0
           const changedClass = changed && p !== viewed.firstHand ? 'ring-2 ring-blue-500/50' : ''
+          const isFirstHand = p === viewed.firstHand
+          const isDealer = p === dealer
+          // Третий игрок — вторая рука. Полосу рисуем всем, чтобы карточки были
+          // одной высоты, а роль читалась с другого конца стола.
+          const roleLabel = isFirstHand ? '1 РУКА'
+            : isDealer
+              ? 'СДАЁТ'
+              : '2 РУКА'
+          const roleClass = isFirstHand
+            ? 'bg-yellow-500 text-slate-900'
+            : isDealer
+              ? 'bg-slate-600 text-slate-100'
+              : 'bg-slate-900 text-slate-500'
           return (
-            <div key={p} className={`bg-slate-800 rounded-2xl p-6 ${playerColor(p)} ${changedClass}`}>
-              <div className="flex items-center justify-between mb-4 gap-2">
+            <div
+              key={p}
+              className={`bg-slate-800 rounded-2xl p-5 ${playerColor(p)} ${changedClass} ${
+                isFirstHand ? 'ring-2 ring-yellow-500' : ''
+              }`}
+            >
+              <div
+                className={`mb-3 py-2 rounded-lg text-center text-lg font-extrabold tracking-widest ${roleClass}`}
+              >
+                {roleLabel}
+              </div>
+              <div className="flex items-baseline justify-between gap-2 mb-4">
                 <div className="text-2xl font-bold truncate">{game.players[p]}</div>
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  <span
-                    className={`text-3xl font-extrabold ${
-                      settlement.net[p] > 0
-                        ? 'text-green-400'
-                        : settlement.net[p] < 0
-                          ? 'text-red-400'
-                          : 'text-slate-400'
-                    }`}
-                  >
-                    {settlement.net[p] > 0 ? '+' : ''}
-                    {settlement.net[p]}
-                  </span>
-                  {p === viewed.firstHand && (
-                    <span className="text-sm bg-yellow-500 text-slate-900 px-2.5 py-1 rounded font-bold">
-                      1 РУКА
-                    </span>
-                  )}
-                  {p === dealer && (
-                    <span className="text-sm bg-slate-600 text-slate-100 px-2.5 py-1 rounded font-semibold">
-                      СДАЁТ
-                    </span>
-                  )}
-                </div>
+                <span
+                  className={`text-4xl font-extrabold tabular-nums ${
+                    settlement.net[p] > 0
+                      ? 'text-green-400'
+                      : settlement.net[p] < 0
+                        ? 'text-red-400'
+                        : 'text-slate-400'
+                  }`}
+                >
+                  {settlement.net[p] > 0 ? '+' : ''}
+                  {settlement.net[p]}
+                </span>
               </div>
 
               <div className="space-y-2 mb-4">

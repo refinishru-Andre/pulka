@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
-import type { Deal, PlayerId, GameLevel, Suit, VistDecision, Contract, RaspasState } from '../engine/types'
-import { PLAYERS, SUITS, SUIT_LABEL } from '../engine/types'
+import type { Deal, PlayerId, GameLevel, VistDecision, Contract, RaspasState } from '../engine/types'
+import { PLAYERS } from '../engine/types'
 import { raspasLevelFor, RASPAS_TRICK_COST } from '../engine'
 
 type DealType = 'game' | 'misere' | 'raspas' | 'giveup'
@@ -26,7 +26,9 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
   const initialLevel = Math.max(6, minBid) as GameLevel
   const [gamePlayer, setGamePlayer] = useState<PlayerId>('A')
   const [gameLevel, setGameLevel] = useState<GameLevel>(initialLevel)
-  const [gameSuit, setGameSuit] = useState<Suit>('S')
+  // Масть не спрашиваем — она не влияет ни на одну формулу.
+  // Единственное исключение: 6♠ (Сталинград), где вистуют оба.
+  const [stalingrad, setStalingrad] = useState(false)
   const [gamePlayerTricks, setGamePlayerTricks] = useState<number>(initialLevel)
   const [gameVisterTricks, setGameVisterTricks] = useState<Record<PlayerId, number>>({
     A: 0, B: 0, C: 0,
@@ -44,14 +46,13 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
 
   const [giveupPlayer, setGiveupPlayer] = useState<PlayerId>('A')
   const [giveupLevel, setGiveupLevel] = useState<GameLevel>(initialLevel)
-  const [giveupSuit, setGiveupSuit] = useState<Suit>('S')
 
   // Валидация и построение сдачи
   const { canSubmit, buildDeal } = useMemo(() => {
     if (dealType === 'game') {
       const visters = PLAYERS.filter((p) => p !== gamePlayer)
       // Сталинград форсирует вист обоих на 6♠
-      const isStalingrad = gameLevel === 6 && gameSuit === 'S'
+      const isStalingrad = gameLevel === 6 && stalingrad
       const effectiveDecisions = isStalingrad
         ? { ...gameVistDecisions, ...Object.fromEntries(visters.map((v) => [v, 'vist' as const])) }
         : gameVistDecisions
@@ -65,7 +66,9 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
       const vTotal = visters.reduce((s, v) => s + gameVisterTricks[v], 0)
       const need = 10 - gamePlayerTricks
       const ok = isAuto || vTotal === need
-      const contract: Contract = { kind: 'game', level: gameLevel, suit: gameSuit }
+      const contract: Contract = isStalingrad
+        ? { kind: 'game', level: 6, suit: 'S' }
+        : { kind: 'game', level: gameLevel }
       return {
         canSubmit: ok,
         buildDeal: (): Deal => ({
@@ -115,13 +118,13 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         dealer: prevClockwise(game.firstHand),
         firstHand: game.firstHand,
         player: giveupPlayer,
-        contract: { kind: 'game', level: giveupLevel, suit: giveupSuit },
+        contract: { kind: 'game', level: giveupLevel },
       }),
     }
   }, [
-    dealType, game.firstHand, gamePlayer, gameLevel, gameSuit, gamePlayerTricks,
+    dealType, game.firstHand, gamePlayer, gameLevel, stalingrad, gamePlayerTricks,
     gameVisterTricks, gameVistDecisions, misPlayer, misTricks,
-    raspasTricks, raspasState, giveupPlayer, giveupLevel, giveupSuit,
+    raspasTricks, raspasState, giveupPlayer, giveupLevel,
   ])
 
   const handleSubmit = () => {
@@ -179,8 +182,8 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
               setGamePlayer={setGamePlayer}
               gameLevel={gameLevel}
               setGameLevel={setGameLevel}
-              gameSuit={gameSuit}
-              setGameSuit={setGameSuit}
+              stalingrad={stalingrad}
+              setStalingrad={setStalingrad}
               gamePlayerTricks={gamePlayerTricks}
               setGamePlayerTricks={setGamePlayerTricks}
               gameVisterTricks={gameVisterTricks}
@@ -211,8 +214,6 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
               setGiveupPlayer={setGiveupPlayer}
               giveupLevel={giveupLevel}
               setGiveupLevel={setGiveupLevel}
-              giveupSuit={giveupSuit}
-              setGiveupSuit={setGiveupSuit}
             />
           )}
         </div>
@@ -240,8 +241,8 @@ function GameFormFields(props: {
   setGamePlayer: (p: PlayerId) => void
   gameLevel: GameLevel
   setGameLevel: (l: GameLevel) => void
-  gameSuit: Suit
-  setGameSuit: (s: Suit) => void
+  stalingrad: boolean
+  setStalingrad: (v: boolean) => void
   gamePlayerTricks: number
   setGamePlayerTricks: (n: number) => void
   gameVisterTricks: Record<PlayerId, number>
@@ -251,7 +252,7 @@ function GameFormFields(props: {
 }) {
   const game = useGameStore((s) => s.game)!
   const {
-    minBid, gamePlayer, setGamePlayer, gameLevel, setGameLevel, gameSuit, setGameSuit,
+    minBid, gamePlayer, setGamePlayer, gameLevel, setGameLevel, stalingrad, setStalingrad,
     gamePlayerTricks, setGamePlayerTricks, gameVisterTricks, setGameVisterTricks,
     gameVistDecisions, setGameVistDecisions,
   } = props
@@ -261,7 +262,7 @@ function GameFormFields(props: {
   const entered = visters.reduce((s, v) => s + gameVisterTricks[v], 0)
   const tricksOk = entered === need
   const availableLevels = GAME_LEVELS.filter((l) => l >= minBid)
-  const isStalingrad = gameLevel === 6 && gameSuit === 'S'
+  const isStalingrad = gameLevel === 6 && stalingrad
   // Автомат-сценарии: без розыгрыша, играющему пуля автоматом
   const effVistDecisions = isStalingrad
     ? { ...gameVistDecisions, ...Object.fromEntries(visters.map((v) => [v, 'vist' as const])) }
@@ -296,15 +297,19 @@ function GameFormFields(props: {
         </div>
       </div>
 
-      {/* Заказ: уровень + масть в 2 ряда */}
+      {/* Заказ. Масть не спрашиваем — на расчёт влияет только уровень 6–10.
+          Выбор есть лишь на шестерной: 6♠ = Сталинград, вистуют оба. */}
       <div>
         <div className="text-xs text-slate-400 mb-1">Заказ</div>
-        <div className="grid grid-cols-5 gap-2 mb-2">
+        <div className="grid grid-cols-5 gap-2">
           {availableLevels.map((l) => (
             <button
               key={l}
-              onClick={() => setGameLevel(l)}
-              className={`py-2 rounded-lg font-semibold ${
+              onClick={() => {
+                setGameLevel(l)
+                if (l !== 6) setStalingrad(false)
+              }}
+              className={`py-3 rounded-lg font-bold text-lg ${
                 gameLevel === l ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
               }`}
             >
@@ -312,19 +317,26 @@ function GameFormFields(props: {
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-5 gap-2">
-          {SUITS.map((s) => (
+        {gameLevel === 6 && (
+          <div className="grid grid-cols-2 gap-2 mt-2">
             <button
-              key={s}
-              onClick={() => setGameSuit(s)}
-              className={`py-2 rounded-lg font-semibold text-lg ${
-                gameSuit === s ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
-              } ${s === 'H' || s === 'D' ? 'text-red-400' : ''}`}
+              onClick={() => setStalingrad(false)}
+              className={`py-3 rounded-lg font-semibold ${
+                !stalingrad ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
+              }`}
             >
-              {SUIT_LABEL[s]}
+              Обычная шестерная
             </button>
-          ))}
-        </div>
+            <button
+              onClick={() => setStalingrad(true)}
+              className={`py-3 rounded-lg font-semibold ${
+                stalingrad ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
+              }`}
+            >
+              ♠ Сталинград
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Взятки играющего — только если требуется розыгрыш */}
@@ -555,12 +567,10 @@ function GiveupFormFields(props: {
   setGiveupPlayer: (p: PlayerId) => void
   giveupLevel: GameLevel
   setGiveupLevel: (l: GameLevel) => void
-  giveupSuit: Suit
-  setGiveupSuit: (s: Suit) => void
 }) {
   const game = useGameStore((s) => s.game)!
   const {
-    minBid, giveupPlayer, setGiveupPlayer, giveupLevel, setGiveupLevel, giveupSuit, setGiveupSuit,
+    minBid, giveupPlayer, setGiveupPlayer, giveupLevel, setGiveupLevel,
   } = props
   const availableLevels = GAME_LEVELS.filter((l) => l >= minBid)
 
@@ -585,7 +595,7 @@ function GiveupFormFields(props: {
 
       <div>
         <div className="text-xs text-slate-400 mb-1">Заказ</div>
-        <div className="grid grid-cols-5 gap-2 mb-2">
+        <div className="grid grid-cols-5 gap-2">
           {availableLevels.map((l) => (
             <button
               key={l}
@@ -598,19 +608,7 @@ function GiveupFormFields(props: {
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-5 gap-2">
-          {SUITS.map((s) => (
-            <button
-              key={s}
-              onClick={() => setGiveupSuit(s)}
-              className={`py-2 rounded-lg font-semibold text-lg ${
-                giveupSuit === s ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
-              } ${s === 'H' || s === 'D' ? 'text-red-400' : ''}`}
-            >
-              {SUIT_LABEL[s]}
-            </button>
-          ))}
-        </div>
+
       </div>
     </div>
   )
