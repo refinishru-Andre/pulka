@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { fetchGames, deleteGame } from '../supabase/sync'
+import { fetchGamesResult, deleteGame, uploadGame } from '../supabase/sync'
 import { supabase } from '../supabase/client'
 import { useGameStore } from '../store/game'
+import { listOrphans, dropOrphan, dropSynced, type Orphan } from '../store/orphans'
+import { importFromGames } from '../supabase/people'
+import { getCodeHint, clearCodeHint } from '../supabase/auth'
 import { settle } from '../engine'
 import type { GameState } from '../engine/types'
 import { PLAYERS } from '../engine/types'
@@ -22,13 +25,55 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
   const [games, setGames] = useState<CloudGameItem[]>([])
   const [loading, setLoading] = useState(true)
   const [syncOk, setSyncOk] = useState(false)
+  const [orphans, setOrphans] = useState<Orphan[]>([])
+  const [busyId, setBusyId] = useState<string | null>(null)
   const loadGame = useGameStore((s) => s.loadGame)
+  const codeHint = getCodeHint()
+
+  // Партии, которые есть только на этом устройстве и не попали в облако:
+  // играли без входа или в момент игры не было связи.
+  const collectOrphans = (cloudIds: Set<string>): Orphan[] => {
+    dropSynced(cloudIds)
+    const found = listOrphans().filter((o) => !cloudIds.has(o.id))
+    const { game, gameId } = useGameStore.getState()
+    if (
+      gameId &&
+      game &&
+      game.deals.length > 0 &&
+      !cloudIds.has(gameId) &&
+      !found.some((o) => o.id === gameId)
+    ) {
+      found.push({ id: gameId, game, savedAt: game.createdAt })
+    }
+    return found.sort((a, b) => b.savedAt - a.savedAt)
+  }
 
   const refresh = async () => {
     setLoading(true)
-    const list = await fetchGames()
-    setGames(list)
+    const res = await fetchGamesResult()
+    setGames(res.items)
+    // Считаем «потеряшки» только когда облако реально ответило
+    if (res.ok) setOrphans(collectOrphans(new Set(res.items.map((g) => g.id))))
     setLoading(false)
+  }
+
+  // Загрузить локальную партию в облако + завести её игроков в справочник
+  const handleUploadOrphan = async (o: Orphan) => {
+    setBusyId(o.id)
+    try {
+      await importFromGames([{ players: o.game.players }])
+      await uploadGame(o.id, o.game)
+      dropOrphan(o.id)
+      await refresh()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const handleDropOrphan = (o: Orphan) => {
+    if (!confirm('Удалить эту локальную партию без сохранения? Восстановить будет нельзя.')) return
+    dropOrphan(o.id)
+    setOrphans((prev) => prev.filter((x) => x.id !== o.id))
   }
 
   useEffect(() => {
@@ -54,6 +99,7 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
   }
 
   const handleLogout = async () => {
+    clearCodeHint()
     await supabase.auth.signOut()
     window.location.reload()
   }
@@ -65,9 +111,14 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
           <div>
             <h1 className="text-3xl font-bold">Мои партии</h1>
             {syncOk && (
-              <div className="text-sm text-green-400 mt-1 flex items-center gap-1">
+              <div className="text-sm text-green-400 mt-1 flex items-center gap-1 flex-wrap">
                 <span>●</span>
                 <span>Синхронизировано с облаком</span>
+                {codeHint && (
+                  <span className="text-slate-400">
+                    · коллекция «<span className="text-slate-200">{codeHint}</span>»
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -102,6 +153,49 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
             )}
           </div>
         </div>
+
+        {orphans.length > 0 && (
+          <div className="mb-6 bg-yellow-500/10 border border-yellow-500/40 rounded-2xl p-5">
+            <div className="text-lg font-bold text-yellow-300 mb-1">
+              Есть партии только на этом устройстве
+            </div>
+            <div className="text-sm text-yellow-100/70 mb-4">
+              Они записались, когда не было входа или связи. В облаке и в статистике их пока нет —
+              нажми «Загрузить в облако».
+            </div>
+            <div className="space-y-3">
+              {orphans.map((o) => (
+                <div
+                  key={o.id}
+                  className="bg-slate-800 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap"
+                >
+                  <div>
+                    <div className="font-bold">{PLAYERS.map((p) => o.game.players[p]).join(' · ')}</div>
+                    <div className="text-sm text-slate-400">
+                      Пуля до {o.game.poolLimit} · сдач: {o.game.deals.length} ·{' '}
+                      {new Date(o.game.createdAt).toLocaleString('ru')}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleUploadOrphan(o)}
+                      disabled={busyId === o.id}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 rounded-lg font-semibold"
+                    >
+                      {busyId === o.id ? 'Загружаю...' : 'Загрузить в облако'}
+                    </button>
+                    <button
+                      onClick={() => handleDropOrphan(o)}
+                      className="px-3 py-2 bg-slate-700 hover:bg-red-600 rounded-lg text-sm"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading && <div className="text-center text-slate-400 py-10">Загрузка...</div>}
 

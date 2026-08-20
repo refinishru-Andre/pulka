@@ -88,10 +88,17 @@ export async function uploadGame(
   if (error) console.error('[sync] upload failed:', error)
 }
 
-// Загрузить все игры пользователя из облака
-export async function fetchGames(): Promise<{ id: string; game: GameState; finished: boolean }[]> {
+export interface GamesFetch {
+  ok: boolean // false = не смогли достучаться до облака (нет связи / не залогинен)
+  items: { id: string; game: GameState; finished: boolean }[]
+}
+
+// Загрузить все игры пользователя из облака.
+// ok отличает «в облаке пусто» от «облако недоступно» — это важно, чтобы
+// не пугать человека сообщением «партия не сохранена» при обрыве связи.
+export async function fetchGamesResult(): Promise<GamesFetch> {
   const user = (await supabase.auth.getUser()).data.user
-  if (!user) return []
+  if (!user) return { ok: false, items: [] }
 
   const { data, error } = await supabase
     .from('games')
@@ -100,14 +107,20 @@ export async function fetchGames(): Promise<{ id: string; game: GameState; finis
 
   if (error) {
     console.error('[sync] fetch failed:', error)
-    return []
+    return { ok: false, items: [] }
   }
-  return (data as CloudGame[]).map((c) => {
+  const items = (data as CloudGame[]).map((c) => {
     const raw = fromCloud(c)
     // Пересчитываем state из deals — cloud state мог быть с багами старой логики
     const game = raw.deals.length > 0 ? recomputeState(raw) : raw
     return { id: c.id, game, finished: c.finished }
   })
+  return { ok: true, items }
+}
+
+// Короткая форма — когда разница «пусто / нет связи» не важна
+export async function fetchGames(): Promise<{ id: string; game: GameState; finished: boolean }[]> {
+  return (await fetchGamesResult()).items
 }
 
 // Пересчитать state из deals[] — гарантирует что pool/mount/whists соответствуют актуальной логике движка

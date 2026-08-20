@@ -6,6 +6,7 @@ import type { Deal, GameState, PlayerId } from '../engine/types'
 import { applyDeal, undoLastDeal } from '../engine'
 import { uploadGame } from '../supabase/sync'
 import { PLAYERS } from '../engine/types'
+import { stashOrphan } from './orphans'
 
 // Версия логики расчёта. Инкрементируется при изменении формул — вызывает пересчёт всех игр.
 const CALC_VERSION = 2
@@ -79,12 +80,15 @@ export const useGameStore = create<Store>()(
       redoStack: [],
       viewIndex: null,
       newGame: ({ players, poolLimit, firstHand }) => {
+        // Текущую партию откладываем про запас — вдруг она ещё не уехала в облако
+        stashOrphan(get().gameId, get().game)
         const id = uuid()
         const game = initialGameState(players, poolLimit, firstHand)
         set({ game, gameId: id, redoStack: [], viewIndex: null })
         scheduleSync(id, game)
       },
       loadGame: (id, game) => {
+        if (get().gameId !== id) stashOrphan(get().gameId, get().game)
         // Пересчитываем state из deals по актуальной логике движка (на случай изменения правил).
         // Загруженный из облака state мог быть с багами — deals[] это единственный источник истины.
         if (game.deals.length > 0) {
@@ -149,7 +153,10 @@ export const useGameStore = create<Store>()(
         const id = get().gameId
         if (id) scheduleSync(id, newGame)
       },
-      resetGame: () => set({ game: null, gameId: null, redoStack: [], viewIndex: null }),
+      resetGame: () => {
+        stashOrphan(get().gameId, get().game)
+        set({ game: null, gameId: null, redoStack: [], viewIndex: null })
+      },
       finishGame: () => {
         const g = get().game
         if (!g) return
