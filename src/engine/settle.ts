@@ -3,21 +3,22 @@
 
 import type { GameState, PlayerId, Seats, Settlement } from './types'
 import { PLAYERS, seatsOf, zeroScores } from './types'
-import { POOL_TO_VISTS, MOUNT_TO_VISTS } from './rules'
+import { rulesOf } from './conventions'
 
 // Вычислить net каждого игрока
 // Семантика whists[i][j]: «i получает от j эти висты» (в свою пользу).
 // В классической пульке: игрок пишет висты в своё поле «→ соперник» — это ЕГО плюс.
 export function calcNet(state: GameState): Record<PlayerId, number> {
   const seats = seatsOf(state)
+  const { poolToVists, mountToVists } = rulesOf(state)
   const avgPool = seats.reduce((s, p) => s + (state.pool[p] ?? 0), 0) / seats.length
   const avgMount = seats.reduce((s, p) => s + (state.mount[p] ?? 0), 0) / seats.length
 
   const net: Record<PlayerId, number> = zeroScores()
   seats.forEach((p) => {
     const own =
-      ((state.pool[p] ?? 0) - avgPool) * POOL_TO_VISTS -
-      ((state.mount[p] ?? 0) - avgMount) * MOUNT_TO_VISTS
+      ((state.pool[p] ?? 0) - avgPool) * poolToVists -
+      ((state.mount[p] ?? 0) - avgMount) * mountToVists
     // written = сколько p написал на других = сколько p получает (плюс для p)
     const written = seats.reduce((s, other) => (other === p ? s : s + (state.whists[p]?.[other] ?? 0)), 0)
     // owed = сколько на p написали = сколько p должен (минус для p)

@@ -101,6 +101,18 @@ export interface Rules {
   // кто сдавал). Пишется и когда сыграл, и когда сел. На мизере не бывает.
   prikupBonus: boolean
 
+  // ---------- Курс перевода в висты ----------
+  // Ленинградка: очко пули = 2 очка горы, очко горы = 10 вистов.
+  // Сочинка, ростов, классика: очко пули = очко горы, оба по 10.
+  poolToVists: number
+  mountToVists: number
+  // Помощь (перекрытие пули): сколько вистов пишет отдавший за каждое очко.
+  // ВАЖНО: это НЕ выводится из poolToVists. В кодексе преферанса помощь —
+  // самостоятельное правило, и там 10 вистов за очко даже в ленинградке, где
+  // очко пули стоит 20. Сверено по кодексу 2026-08-26: вывод «раз пуля 20, то и
+  // помощь 20» неверен, потому что правило задано явно.
+  helpVistsPerPoint: number
+
   // ---------- Прочее ----------
   allowGiveup: boolean // уход «без трёх, без вистов»
 }
@@ -142,6 +154,10 @@ export const HOME_RULES: Rules = {
 
   prikupBonus: false,
 
+  poolToVists: 20,
+  mountToVists: 10,
+  helpVistsPerPoint: 10,
+
   allowGiveup: true,
 }
 
@@ -181,6 +197,10 @@ export const FSPR_RULES: Rules = {
   misereBreaksRaspas: false, // мизер не вистуется, значит не выход
 
   prikupBonus: true, // (6.4)
+
+  poolToVists: 20,
+  mountToVists: 10,
+  helpVistsPerPoint: 10, // на турнире пуля без предела — помощи не бывает
 
   allowGiveup: false, // «уход без трёх, без вистов» не допускается (6.6)
 }

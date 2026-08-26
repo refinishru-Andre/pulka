@@ -18,8 +18,6 @@ import {
 } from './raspas'
 import { ALL_PLAYERS, seatsOf, zeroScores, zeroWhists } from './types'
 import { rulesOf } from './conventions'
-// Правило Андрея: 1 очко переданной пули = 10 вистов
-const POOL_TRANSFER_VISTS_PER_POINT = 10
 
 // Полная дельта: базовый calcDeal + учёт перекрытия пули (для отображения и применения)
 export function calcDealFull(state: GameState, deal: Deal): DealDelta {
@@ -50,18 +48,18 @@ export function calcDealFull(state: GameState, deal: Deal): DealDelta {
         const transfer = Math.min(excess, room)
         delta.pool[next] += transfer
         pool[next] += transfer
-        // Правило: передающий (p) получает висты от получателя (next).
-        // Значит p пишет в свою пользу висты на next.
-        delta.whists.push({ from: p, to: next, amount: transfer * POOL_TRANSFER_VISTS_PER_POINT })
+        // Помощь: передающий (p) пишет висты на получателя (next).
+        // Цена помощи — отдельное правило кодекса, из курса пули не выводится.
+        delta.whists.push({ from: p, to: next, amount: transfer * rules.helpVistsPerPoint })
         excess -= transfer
       }
       next = nextClockwise(next, seats)
     }
-    // Если после передачи остался излишек — все игроки закрыты.
-    // Правило: 1 очко пули = 2 очка списанной горы (эквивалент 20 вистов).
-    // Итог: остаток * 2 в минус горы.
+    // Излишек остался, а отдавать некому — все закрыты. Тогда очки пули
+    // переводятся в списание горы по курсу партии: в ленинградке очко пули = 2
+    // очка горы, в сочинке = 1.
     if (excess > 0) {
-      delta.mount[p] -= excess * 2
+      delta.mount[p] -= (excess * rules.poolToVists) / rules.mountToVists
     }
   }
   return delta
