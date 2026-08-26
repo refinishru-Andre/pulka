@@ -925,10 +925,10 @@ describe('Вмороженная партия не пересчитываетс�
     vistDecisions: { A: 'vist', B: 'vist' },
   }
 
-  it('без метки — пересчитывается из сдач, кеш чинится', () => {
+  it('идущая партия — пересчитывается из сдач, кеш чинится', () => {
     const g: GameState = { ...initState(), deals: [played] }
-    // В кеше заведомая чушь — пересчёт обязан её выправить
-    g.pool = { A: 99, B: 99, C: 99, D: 0 }
+    // В кеше мусор, но пули не закрыты — партия идёт, пересчёт обязан выправить
+    g.pool = { A: 5, B: 5, C: 5, D: 0 }
     const out = recomputeState(g)
     expect(out.pool.C).toBe(4)
     expect(out.pool.A).toBe(0)
@@ -936,11 +936,32 @@ describe('Вмороженная партия не пересчитываетс�
 
   it('с меткой frozenAt — цифры остаются как записаны, даже неверные', () => {
     const g: GameState = { ...initState(), deals: [played], frozenAt: 1756200000000 }
-    g.pool = { A: 99, B: 99, C: 99, D: 0 }
+    g.pool = { A: 9, B: 4, C: 6, D: 0 }
     const out = recomputeState(g)
     // Ровно то, что было записано: партия сыграна, её итог зафиксирован
-    expect(out.pool).toEqual({ A: 99, B: 99, C: 99, D: 0 })
+    expect(out.pool).toEqual({ A: 9, B: 4, C: 6, D: 0 })
     expect(out).toBe(g) // и объект тот же — никакой работы не делалось
+  })
+
+  it('завершённая вручную партия БЕЗ метки тоже не пересчитывается', () => {
+    // Партии, сыгранные до появления заморозки, метки не имеют. Их защищает сама
+    // завершённость — иначе пришлось бы лезть в облако и проставлять метки.
+    const g: GameState = { ...initState(), deals: [played], finishedManually: true }
+    g.pool = { A: 7, B: 3, C: 5, D: 0 }
+    expect(recomputeState(g).pool).toEqual({ A: 7, B: 3, C: 5, D: 0 })
+  })
+
+  it('партия с закрытыми пулями не пересчитывается', () => {
+    const g: GameState = { ...initState(), deals: [played], poolLimit: 21 }
+    g.pool = { A: 21, B: 21, C: 21, D: 0 }
+    expect(recomputeState(g).pool).toEqual({ A: 21, B: 21, C: 21, D: 0 })
+  })
+
+  it('НЕзавершённая партия пересчитывается как раньше', () => {
+    const g: GameState = { ...initState(), deals: [played] }
+    g.pool = { A: 9, B: 0, C: 0, D: 0 }
+    expect(recomputeState(g).pool.A).toBe(0)
+    expect(recomputeState(g).pool.C).toBe(4)
   })
 
   it('freezeGame ставит метку один раз и не перетирает её', () => {
