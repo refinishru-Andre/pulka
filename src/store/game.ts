@@ -9,6 +9,7 @@ import {
   recomputeState,
   freezeGame,
   isGameFinished as allPoolsClosed,
+  type Rules,
 } from '../engine'
 import { uploadGame, type UploadResult } from '../supabase/sync'
 import { PLAYERS, zeroScores, zeroWhists } from '../engine/types'
@@ -99,8 +100,10 @@ interface Store {
   viewIndex: number | null // локальный курсор просмотра истории (null = смотрим финал). НЕ синхронизируется.
   newGame: (params: {
     players: Record<PlayerId, string>
-    poolLimit: number
+    poolLimit: number | null // null = пуля без предела
     firstHand: PlayerId
+    seats?: Seats // трое или четверо; по умолчанию трое
+    rules?: Rules // конвенции партии; по умолчанию «Дом»
   }) => void
   loadGame: (id: string, game: GameState) => void
   addDeal: (deal: Deal) => void
@@ -117,12 +120,14 @@ interface Store {
 
 const initialGameState = (
   players: Record<PlayerId, string>,
-  poolLimit: number,
+  poolLimit: number | null,
   firstHand: PlayerId,
   seats: Seats = PLAYERS,
+  rules?: Rules,
 ): GameState => ({
   players,
   seats,
+  rules,
   poolLimit,
   createdAt: Date.now(),
   pool: zeroScores(),
@@ -141,11 +146,11 @@ export const useGameStore = create<Store>()(
       gameId: null,
       redoStack: [],
       viewIndex: null,
-      newGame: ({ players, poolLimit, firstHand }) => {
+      newGame: ({ players, poolLimit, firstHand, seats, rules }) => {
         // Текущую партию откладываем про запас — вдруг она ещё не уехала в облако
         stashOrphan(get().gameId, get().game)
         const id = uuid()
-        const game = initialGameState(players, poolLimit, firstHand)
+        const game = initialGameState(players, poolLimit, firstHand, seats, rules)
         set({ game, gameId: id, redoStack: [], viewIndex: null })
         scheduleSync(id, game)
       },

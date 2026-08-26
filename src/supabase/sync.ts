@@ -4,7 +4,7 @@
 
 import { supabase } from './client'
 import type { GameState, Deal, Seats } from '../engine/types'
-import { recomputeState } from '../engine'
+import { recomputeState, type Rules } from '../engine'
 
 interface CloudGame {
   id: string
@@ -24,6 +24,8 @@ interface CloudGame {
     // Места за столом. У партий, записанных до появления игры вчетвером,
     // поля нет — это стол на троих (см. seatsOf).
     seats?: Seats
+    // Конвенции партии. У партий, записанных раньше, поля нет — тогда «Дом».
+    rules?: Rules
     // Итог вморожен — не пересчитывать (см. recomputeState)
     frozenAt?: number
   }
@@ -45,6 +47,7 @@ function toCloudState(game: GameState) {
     deals: game.deals,
     finishedManually: game.finishedManually,
     seats: game.seats,
+    rules: game.rules,
     frozenAt: game.frozenAt,
     // lastDelta не сохраняем, он вычисляется
   }
@@ -65,6 +68,7 @@ function fromCloud(cloud: CloudGame): GameState {
     deals: cloud.state.deals,
     finishedManually: cloud.state.finishedManually,
     seats: cloud.state.seats,
+    rules: cloud.state.rules,
     frozenAt: cloud.state.frozenAt,
   }
 }
@@ -90,7 +94,8 @@ export async function uploadGame(
   const user = session?.user
   if (!user) return 'guest' // не авторизован — не синхронизируем
 
-  const allClosed = Object.values(game.pool).every((p) => p >= game.poolLimit)
+  const limit = game.poolLimit
+  const allClosed = limit !== null && Object.values(game.pool).every((p) => p >= limit)
   const finished = allClosed || game.finishedManually === true
 
   const payload = {

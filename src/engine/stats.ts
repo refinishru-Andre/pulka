@@ -75,7 +75,8 @@ function emptyOrderStats(): OrderStats {
 
 function isGameFinished(g: GameState): boolean {
   if (g.finishedManually) return true
-  return seatsOf(g).every((p) => g.pool[p] >= g.poolLimit)
+  if (g.poolLimit === null) return false // без предела — только вручную
+  return seatsOf(g).every((p) => g.pool[p] >= g.poolLimit!)
 }
 
 function newPlayerStats(name: string): PlayerStats {

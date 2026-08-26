@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
 import { useSyncStatus } from '../store/sync-status'
-import { settle, minBidFor, applyDeal, emptyStateFrom, prevClockwise } from '../engine'
-import { PLAYERS, zeroWhists } from '../engine/types'
+import { settle, minBidFor, applyDeal, emptyStateFrom, prevClockwise, isGameFinished } from '../engine'
+import { zeroWhists, seatsOf } from '../engine/types'
 import type { PlayerId, GameState } from '../engine/types'
 import { DealForm } from './DealForm'
 
@@ -58,9 +58,11 @@ export function Table({ onBack }: Props = {}) {
   const [confirmFinish, setConfirmFinish] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // Партия автозавершена если все пули закрыты
-  const allPoolsClosed = PLAYERS.every((p) => game.pool[p] >= game.poolLimit)
-  const isFinished = allPoolsClosed || game.finishedManually === true
+  // Кто за столом: трое или четверо. Читаем из партии, а не из константы.
+  const seats = seatsOf(game)
+  // Партия окончена: все пули закрыты либо посчитали вручную.
+  // Без предела пуля не закрывается — только кнопкой «Рассчитать».
+  const isFinished = isGameFinished(game) || game.finishedManually === true
 
   // Просматриваемое состояние (для истории)
   const viewingHistory = viewIndex !== null
@@ -70,7 +72,7 @@ export function Table({ onBack }: Props = {}) {
   }, [game, viewIndex, viewingHistory])
 
   // Сдающий = предыдущий по часовой от firstHand ВИДИМОГО состояния
-  const dealer = prevClockwise(viewed.firstHand)
+  const dealer = prevClockwise(viewed.firstHand, seats)
 
   const settlement = settle(viewed)
   const minBid = minBidFor(viewed.raspasState)
@@ -87,7 +89,7 @@ export function Table({ onBack }: Props = {}) {
   const playerHasChanges = (p: PlayerId): boolean => {
     if (!lastDelta) return false
     if (lastDelta.pool[p] !== 0 || lastDelta.mount[p] !== 0) return true
-    if (PLAYERS.some((o) => lastWhistDelta[p][o] !== 0 || lastWhistDelta[o][p] !== 0)) return true
+    if (seats.some((o) => lastWhistDelta[p][o] !== 0 || lastWhistDelta[o][p] !== 0)) return true
     return false
   }
 
@@ -125,7 +127,7 @@ export function Table({ onBack }: Props = {}) {
       lines.push(
         `${player} играл ${contractLabel(lastDeal.contract)}, взял ${lastDeal.playerTricks}.`,
       )
-      const vs = PLAYERS.filter((p) => p !== lastDeal.player)
+      const vs = seats.filter((p) => p !== lastDeal.player && lastDeal.vistDecisions[p] !== undefined)
       vs.forEach((v) => {
         const decision = lastDeal.vistDecisions[v]
         const t = lastDeal.vistersTricks[v]
@@ -140,7 +142,10 @@ export function Table({ onBack }: Props = {}) {
       )
     } else if (lastDeal.type === 'raspas') {
       const levelName = lastDeal.level === 1 ? '1-й' : lastDeal.level === 2 ? '2-й' : '8-мерный'
-      lines.push(`Распас ${levelName}: ` + PLAYERS.map((p) => `${game.players[p]}=${lastDeal.tricks[p]}`).join(', '))
+      lines.push(
+        `Распас ${levelName}: ` +
+          seats.map((p) => `${game.players[p]}=${lastDeal.tricks[p] ?? 0}`).join(', '),
+      )
     } else if (lastDeal.type === 'giveup' && lastDeal.contract.kind === 'game') {
       lines.push(
         `${game.players[lastDeal.player]} ушёл без 3 на ${contractLabel(lastDeal.contract)}.`,
@@ -148,11 +153,11 @@ export function Table({ onBack }: Props = {}) {
     }
     // Расчёт
     lines.push('') // разделитель
-    PLAYERS.forEach((p) => {
+    seats.forEach((p) => {
       const changes: string[] = []
       if (lastDelta.pool[p] !== 0) changes.push(`пуля ${lastDelta.pool[p] > 0 ? '+' : ''}${lastDelta.pool[p]}`)
       if (lastDelta.mount[p] !== 0) changes.push(`гора ${lastDelta.mount[p] > 0 ? '+' : ''}${lastDelta.mount[p]}`)
-      const whistsOut = PLAYERS.filter((o) => o !== p)
+      const whistsOut = seats.filter((o) => o !== p)
         .map((o) => (lastWhistDelta[p][o] !== 0 ? `+${lastWhistDelta[p][o]} на ${game.players[o]}` : null))
         .filter(Boolean)
       if (whistsOut.length > 0) changes.push(`висты ${whistsOut.join(', ')}`)
@@ -169,7 +174,7 @@ export function Table({ onBack }: Props = {}) {
         <div>
           <h1 className="text-3xl font-bold">Людочка</h1>
           <div className="text-base text-slate-400 flex items-center gap-3 flex-wrap mt-1">
-            <span>Пуля до {game.poolLimit}</span>
+            <span>{game.poolLimit === null ? 'Пуля без предела' : `Пуля до ${game.poolLimit}`}</span>
             <span>·</span>
             <span>
               сдач: {viewingHistory ? `${viewIndex}/${game.deals.length}` : game.deals.length}
@@ -181,11 +186,15 @@ export function Table({ onBack }: Props = {}) {
             )}
             <span>·</span>
             {(() => {
-              const sumPool = PLAYERS.reduce((s, p) => s + viewed.pool[p], 0)
-              const inGame = viewed.poolLimit * PLAYERS.length - sumPool
               if (isFinished && !viewingHistory) {
                 return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
               }
+              // Без предела пуля не кончается: играют по времени, считают по кнопке
+              if (viewed.poolLimit === null) {
+                return <span className="text-slate-400">играем по времени</span>
+              }
+              const sumPool = seats.reduce((s, p) => s + viewed.pool[p], 0)
+              const inGame = viewed.poolLimit * seats.length - sumPool
               if (inGame <= 0 && !viewingHistory) {
                 return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
               }
@@ -344,16 +353,17 @@ export function Table({ onBack }: Props = {}) {
         {viewed.raspasState === 'eightRaspas' && (
           <span className="text-slate-400 ml-3">
             · круг:{' '}
-            {PLAYERS.map((p) => `${game.players[p].slice(0, 3)}=${viewed.eightRaspasCounter[p]}`).join(', ')}
+            {seats.map((p) => `${game.players[p].slice(0, 3)}=${viewed.eightRaspasCounter[p]}`).join(', ')}
           </span>
         )}
       </div>
 
-      {/* Основной блок: 3 колонки игроков */}
-      <div className="grid grid-cols-3 gap-5 mb-5">
-        {PLAYERS.map((p) => {
-          const closed = viewed.pool[p] >= viewed.poolLimit
-          const progress = Math.min(100, (viewed.pool[p] / viewed.poolLimit) * 100)
+      {/* Основной блок: по колонке на каждого за столом */}
+      <div className={`grid ${seats.length === 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'} gap-5 mb-5`}>
+        {seats.map((p) => {
+          const limit = viewed.poolLimit
+          const closed = limit !== null && viewed.pool[p] >= limit
+          const progress = limit === null ? 0 : Math.min(100, (viewed.pool[p] / limit) * 100)
           const changed = playerHasChanges(p)
           const poolD = lastDelta?.pool[p] ?? 0
           const mountD = lastDelta?.mount[p] ?? 0
@@ -426,7 +436,7 @@ export function Table({ onBack }: Props = {}) {
 
               <div className="border-t border-slate-700 mt-4 pt-3">
                 <div className="text-sm text-slate-500 mb-2">Висты на кого написал</div>
-                {PLAYERS.filter((o) => o !== p).map((o) => (
+                {seats.filter((o) => o !== p).map((o) => (
                   <div key={o} className="flex justify-between items-baseline text-lg mb-1">
                     <span className="text-slate-400">→ {game.players[o]}</span>
                     <span className="text-whist font-semibold">

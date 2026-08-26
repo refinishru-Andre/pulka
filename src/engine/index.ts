@@ -28,21 +28,24 @@ export function calcDealFull(state: GameState, deal: Deal): DealDelta {
   const delta = calcDeal(deal, seats, rules)
   // Без предела пули перекрывать нечего: играют на время, считают по последней сдаче
   if (!rules.poolOverflowTransfers) return delta
+  // Пуля без предела — перекрывать нечего
+  const limit = state.poolLimit
+  if (limit === null) return delta
   // Симулируем pool после базовой delta
   const pool: Record<PlayerId, number> = { ...zeroScores(), ...state.pool }
   seats.forEach((p) => (pool[p] += delta.pool[p]))
 
   // Обработка перекрытия
   for (const p of seats) {
-    if (pool[p] <= state.poolLimit) continue
-    let excess = pool[p] - state.poolLimit
+    if (pool[p] <= limit) continue
+    let excess = pool[p] - limit
     // Обрезаем избыток из delta.pool[p]
     delta.pool[p] -= excess
-    pool[p] = state.poolLimit
+    pool[p] = limit
     // Передаём соседям по часовой
     let next = nextClockwise(p, seats)
     for (let i = 0; i < seats.length - 1 && excess > 0; i++) {
-      const room = state.poolLimit - pool[next]
+      const room = limit - pool[next]
       if (room > 0) {
         const transfer = Math.min(excess, room)
         delta.pool[next] += transfer
@@ -157,8 +160,10 @@ export function freezeGame(game: GameState, at: number): GameState {
   return { ...game, frozenAt: at }
 }
 
-// Проверка: закрыта ли пуля у игрока
+// Проверка: закрыта ли пуля у игрока.
+// Без предела пуля не закрывается никогда — партия кончается по кнопке.
 export function isPoolClosed(state: GameState, player: PlayerId): boolean {
+  if (state.poolLimit === null) return false
   return state.pool[player] >= state.poolLimit
 }
 
