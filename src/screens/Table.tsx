@@ -1,33 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
 import { useSyncStatus } from '../store/sync-status'
-import { settle, minBidFor, applyDeal } from '../engine'
-import { PLAYERS } from '../engine/types'
+import { settle, minBidFor, applyDeal, emptyStateFrom, prevClockwise } from '../engine'
+import { PLAYERS, zeroWhists } from '../engine/types'
 import type { PlayerId, GameState } from '../engine/types'
 import { DealForm } from './DealForm'
 
-function prevClockwise(p: PlayerId): PlayerId {
-  const idx = PLAYERS.indexOf(p)
-  return PLAYERS[(idx + PLAYERS.length - 1) % PLAYERS.length]
-}
-
 // Вычислить состояние на момент N-й сдачи (для просмотра истории)
 function replayTo(game: GameState, upTo: number): GameState {
-  const initial: GameState = {
-    ...game,
-    pool: { A: 0, B: 0, C: 0 },
-    mount: { A: 0, B: 0, C: 0 },
-    whists: {
-      A: { A: 0, B: 0, C: 0 },
-      B: { A: 0, B: 0, C: 0 },
-      C: { A: 0, B: 0, C: 0 },
-    },
-    firstHand: game.deals[0]?.firstHand ?? game.firstHand,
-    raspasState: 'normal',
-    eightRaspasCounter: { A: 0, B: 0, C: 0 },
-    deals: [],
-    lastDelta: undefined,
-  }
+  const initial = emptyStateFrom(game, game.deals[0]?.firstHand ?? game.firstHand)
   return game.deals.slice(0, upTo).reduce(applyDeal, initial)
 }
 
@@ -97,11 +78,7 @@ export function Table({ onBack }: Props = {}) {
   const lastDeal = viewed.deals[viewed.deals.length - 1]
   const lastDelta = viewed.lastDelta ?? null
   // whists суммируем по (from,to) — может быть несколько записей (например висты + консоляция)
-  const lastWhistDelta: Record<PlayerId, Record<PlayerId, number>> = {
-    A: { A: 0, B: 0, C: 0 },
-    B: { A: 0, B: 0, C: 0 },
-    C: { A: 0, B: 0, C: 0 },
-  }
+  const lastWhistDelta: Record<PlayerId, Record<PlayerId, number>> = zeroWhists()
   if (lastDelta) {
     lastDelta.whists.forEach((w) => {
       lastWhistDelta[w.from][w.to] += w.amount

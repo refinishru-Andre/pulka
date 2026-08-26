@@ -13,7 +13,7 @@ interface Props {
 
 export function NewGame({ onCancel, onCreated }: Props = {}) {
   const newGame = useGameStore((s) => s.newGame)
-  const [selectedIds, setSelectedIds] = useState<Record<PlayerId, string>>({ A: '', B: '', C: '' })
+  const [selectedIds, setSelectedIds] = useState<Record<PlayerId, string>>({ A: '', B: '', C: '', D: '' })
   const [poolLimit, setPoolLimit] = useState(21)
   const [firstHand, setFirstHand] = useState<PlayerId>('A')
   const [people, setPeople] = useState<Person[]>([])
@@ -62,6 +62,7 @@ export function NewGame({ onCancel, onCreated }: Props = {}) {
         A: selectedName('A'),
         B: selectedName('B'),
         C: selectedName('C'),
+        D: '',
       },
       poolLimit,
       firstHand,
@@ -264,13 +265,13 @@ function GuestNewGame({
   firstHand: PlayerId
   setFirstHand: (p: PlayerId) => void
 }) {
-  const [names, setNames] = useState<Record<PlayerId, string>>({ A: '', B: '', C: '' })
+  const [names, setNames] = useState<Record<PlayerId, string>>({ A: '', B: '', C: '', D: '' })
   const canStart = PLAYERS.every((p) => names[p].trim().length > 0)
 
   const handleStart = () => {
     if (!canStart) return
     newGame({
-      players: { A: names.A.trim(), B: names.B.trim(), C: names.C.trim() },
+      players: { A: names.A.trim(), B: names.B.trim(), C: names.C.trim(), D: '' },
       poolLimit,
       firstHand,
     })

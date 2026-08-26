@@ -1,13 +1,19 @@
 // Логика передачи первой руки и переходов состояний распасов
 // См. SPEC.md раздел 5
 
-import type { Deal, GameState, PlayerId, RaspasState } from './types'
-import { PLAYERS } from './types'
+import type { Deal, GameState, PlayerId, RaspasState, Seats } from './types'
+import { PLAYERS, seatsOf, zeroScores } from './types'
 
-// Следующий игрок по часовой (по порядку A → B → C → A)
-export function nextClockwise(p: PlayerId): PlayerId {
-  const idx = PLAYERS.indexOf(p)
-  return PLAYERS[(idx + 1) % PLAYERS.length]
+// Следующий игрок по часовой. seats — порядок посадки (по умолчанию стол на троих).
+export function nextClockwise(p: PlayerId, seats: Seats = PLAYERS): PlayerId {
+  const idx = seats.indexOf(p)
+  return seats[(idx + 1) % seats.length]
+}
+
+// Предыдущий по часовой. Сдающий = предыдущий перед первой рукой.
+export function prevClockwise(p: PlayerId, seats: Seats = PLAYERS): PlayerId {
+  const idx = seats.indexOf(p)
+  return seats[(idx - 1 + seats.length) % seats.length]
 }
 
 // Определить новую первую руку. Правило Андрея (v2):
@@ -37,7 +43,7 @@ export function nextFirstHand(
       return state.firstHand
     }
   }
-  return nextClockwise(state.firstHand)
+  return nextClockwise(state.firstHand, seatsOf(state))
 }
 
 // Определить новое состояние распасов после сдачи
@@ -80,11 +86,11 @@ export function updateEightCounter(
 ): Record<PlayerId, number> {
   // Если мы только-только вошли в 8-мерные — обнуляем счётчик и ставим 1 для входящей руки
   if (state.raspasState !== 'eightRaspas' && newRaspasState === 'eightRaspas') {
-    return { A: 0, B: 0, C: 0, [oldFirstHand]: 1 } as Record<PlayerId, number>
+    return { ...zeroScores(), [oldFirstHand]: 1 }
   }
   // Если мы вышли из 8-мерных — обнуляем
   if (state.raspasState === 'eightRaspas' && newRaspasState !== 'eightRaspas') {
-    return { A: 0, B: 0, C: 0 }
+    return zeroScores()
   }
   // Продолжаем в 8-мерных — увеличиваем счётчик первой руки
   if (state.raspasState === 'eightRaspas' && newRaspasState === 'eightRaspas') {
@@ -94,8 +100,11 @@ export function updateEightCounter(
 }
 
 // Проверить: пройден ли «полный круг» на 8-мерных (все ≥ 1)
-export function isEightRaspasFullCircle(counter: Record<PlayerId, number>): boolean {
-  return PLAYERS.every((p) => counter[p] >= 1)
+export function isEightRaspasFullCircle(
+  counter: Record<PlayerId, number>,
+  seats: Seats = PLAYERS,
+): boolean {
+  return seats.every((p) => counter[p] >= 1)
 }
 
 // Минимальный заказ по состоянию

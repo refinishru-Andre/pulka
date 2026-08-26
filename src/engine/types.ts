@@ -1,7 +1,37 @@
 // Домeнные типы для движка расчёта пульки (Питер + конвенции Андрея)
 
-export type PlayerId = 'A' | 'B' | 'C'
+export type PlayerId = 'A' | 'B' | 'C' | 'D'
+
+// Все возможные места за столом. Кто реально играет в конкретной партии —
+// задаётся в GameState.seats (3 или 4 места в порядке посадки по часовой).
+export const ALL_PLAYERS: PlayerId[] = ['A', 'B', 'C', 'D']
+
+// Стол на троих — умолчание для всех партий, сыгранных до появления
+// четвёртого игрока (у них в данных нет поля seats).
 export const PLAYERS: PlayerId[] = ['A', 'B', 'C']
+
+// Порядок посадки: список мест по часовой стрелке
+export type Seats = PlayerId[]
+
+// Нулевая запись очков сразу на все места (лишние места просто не читаются)
+export function zeroScores(): Record<PlayerId, number> {
+  return { A: 0, B: 0, C: 0, D: 0 }
+}
+
+// Нулевая матрица вистов: whists[from][to]
+export function zeroWhists(): Record<PlayerId, Record<PlayerId, number>> {
+  return {
+    A: zeroScores(),
+    B: zeroScores(),
+    C: zeroScores(),
+    D: zeroScores(),
+  }
+}
+
+// Места партии. Партии, записанные до этой версии, поля seats не имеют — это трое.
+export function seatsOf(state: { seats?: Seats }): Seats {
+  return state.seats && state.seats.length > 0 ? state.seats : PLAYERS
+}
 
 export type Suit = 'S' | 'C' | 'D' | 'H' | 'NT' // пики, трефы, бубны, черви, БК
 export const SUITS: Suit[] = ['S', 'C', 'D', 'H', 'NT']
@@ -36,8 +66,10 @@ export type Deal =
       player: PlayerId // играющий
       contract: Contract
       playerTricks: number // сколько взял играющий
-      vistersTricks: Record<PlayerId, number> // сколько взял каждый вистующий
-      vistDecisions: Record<PlayerId, VistDecision> // решение каждого вистующего
+      // Записи есть только у тех, кто участвовал: вистующих всегда двое, а
+      // вчетвером сдающий вне розыгрыша. Читать через `?? 0`.
+      vistersTricks: Partial<Record<PlayerId, number>>
+      vistDecisions: Partial<Record<PlayerId, VistDecision>>
     }
   // Мизер
   | {
@@ -54,7 +86,9 @@ export type Deal =
       dealer: PlayerId
       firstHand: PlayerId
       level: 1 | 2 | 3 // 1 = обычный, 2 = после первого, 3 = 8-мерные
-      tricks: Record<PlayerId, number> // взятки каждого, сумма = 10
+      // Взятки участников, в сумме 10. Вчетвером сдающий тоже участвует —
+      // он ходит картами прикупа (кодекс ФСПР 6.5), но не больше 2 взяток.
+      tricks: Partial<Record<PlayerId, number>>
     }
   // Уход без 3
   | {
@@ -78,6 +112,9 @@ export type RaspasState = 'normal' | 'afterFirst' | 'afterSecond' | 'eightRaspas
 export interface GameState {
   // Настройки игры (заданы при создании)
   players: Record<PlayerId, string> // имена
+  // Места за столом по часовой стрелке. Отсутствует у партий, сыгранных до
+  // появления игры вчетвером — читать только через seatsOf(), не напрямую.
+  seats?: Seats
   poolLimit: number // размер пули (21 по умолчанию)
   createdAt: number
 

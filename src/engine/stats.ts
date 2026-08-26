@@ -275,8 +275,8 @@ function processDeal(deal: Deal, game: GameState, players: Record<string, Player
       const ps = players[name]
       if (!ps) continue
       ps.raspas.total++
-      ps.raspas.avgTricks += deal.tricks[p]
-      if (deal.tricks[p] === 0) ps.raspas.zeroTricksCount++
+      ps.raspas.avgTricks += deal.tricks[p] ?? 0
+      if ((deal.tricks[p] ?? 0) === 0) ps.raspas.zeroTricksCount++
       if (deal.level === 3) ps.raspas.eightMerCount++
     }
   } else if (deal.type === 'giveup') {

@@ -15,27 +15,28 @@ import {
   nextClockwise,
   isEightRaspasFullCircle,
 } from './raspas'
-import { PLAYERS } from './types'
+import { ALL_PLAYERS, seatsOf, zeroScores, zeroWhists } from './types'
 // Правило Андрея: 1 очко переданной пули = 10 вистов
 const POOL_TRANSFER_VISTS_PER_POINT = 10
 
 // Полная дельта: базовый calcDeal + учёт перекрытия пули (для отображения и применения)
 export function calcDealFull(state: GameState, deal: Deal): DealDelta {
-  const delta = calcDeal(deal)
+  const seats = seatsOf(state)
+  const delta = calcDeal(deal, seats)
   // Симулируем pool после базовой delta
-  const pool: Record<PlayerId, number> = { ...state.pool }
-  PLAYERS.forEach((p) => (pool[p] += delta.pool[p]))
+  const pool: Record<PlayerId, number> = { ...zeroScores(), ...state.pool }
+  seats.forEach((p) => (pool[p] += delta.pool[p]))
 
   // Обработка перекрытия
-  for (const p of PLAYERS) {
+  for (const p of seats) {
     if (pool[p] <= state.poolLimit) continue
     let excess = pool[p] - state.poolLimit
     // Обрезаем избыток из delta.pool[p]
     delta.pool[p] -= excess
     pool[p] = state.poolLimit
     // Передаём соседям по часовой
-    let next = nextClockwise(p)
-    for (let i = 0; i < PLAYERS.length - 1 && excess > 0; i++) {
+    let next = nextClockwise(p, seats)
+    for (let i = 0; i < seats.length - 1 && excess > 0; i++) {
       const room = state.poolLimit - pool[next]
       if (room > 0) {
         const transfer = Math.min(excess, room)
@@ -46,7 +47,7 @@ export function calcDealFull(state: GameState, deal: Deal): DealDelta {
         delta.whists.push({ from: p, to: next, amount: transfer * POOL_TRANSFER_VISTS_PER_POINT })
         excess -= transfer
       }
-      next = nextClockwise(next)
+      next = nextClockwise(next, seats)
     }
     // Если после передачи остался излишек — все игроки закрыты.
     // Правило: 1 очко пули = 2 очка списанной горы (эквивалент 20 вистов).
@@ -60,15 +61,15 @@ export function calcDealFull(state: GameState, deal: Deal): DealDelta {
 
 // Применить сдачу к состоянию → новое состояние
 export function applyDeal(state: GameState, deal: Deal): GameState {
+  const seats = seatsOf(state)
   const delta = calcDealFull(state, deal)
-  const newPool = { ...state.pool }
-  const newMount = { ...state.mount }
-  const newWhists = {
-    A: { ...state.whists.A },
-    B: { ...state.whists.B },
-    C: { ...state.whists.C },
-  }
-  PLAYERS.forEach((p) => {
+  const newPool = { ...zeroScores(), ...state.pool }
+  const newMount = { ...zeroScores(), ...state.mount }
+  const newWhists = zeroWhists()
+  ALL_PLAYERS.forEach((from) =>
+    ALL_PLAYERS.forEach((to) => (newWhists[from][to] = state.whists[from]?.[to] ?? 0)),
+  )
+  seats.forEach((p) => {
     newPool[p] += delta.pool[p]
     newMount[p] += delta.mount[p] // гора может уходить в минус — не ограничиваем
   })
@@ -82,9 +83,9 @@ export function applyDeal(state: GameState, deal: Deal): GameState {
 
   // «Полный круг» на 8-мерных: как только все игроки побывали первой рукой хотя бы 1 раз —
   // эскалация сбрасывается, следующая сдача играется как обычная (мин 6).
-  if (newRaspas === 'eightRaspas' && isEightRaspasFullCircle(newCounter)) {
+  if (newRaspas === 'eightRaspas' && isEightRaspasFullCircle(newCounter, seats)) {
     newRaspas = 'normal'
-    newCounter = { A: 0, B: 0, C: 0 }
+    newCounter = zeroScores()
   }
 
   return {
@@ -103,21 +104,31 @@ export function applyDeal(state: GameState, deal: Deal): GameState {
 // Отменить последнюю сдачу — пересчитать всё с нуля из истории (проще и надёжнее)
 export function undoLastDeal(state: GameState): GameState {
   const deals = state.deals.slice(0, -1)
-  const initialState: GameState = {
+  return deals.reduce(applyDeal, emptyStateFrom(state, deals[0]?.firstHand ?? state.firstHand))
+}
+
+// Чистое стартовое состояние партии: настройки те же, счёт обнулён.
+// Единственное место, где обнуляется счёт — раньше это было продублировано
+// в пяти файлах, и при добавлении четвёртого места разъехалось бы.
+export function emptyStateFrom(state: GameState, firstHand?: PlayerId): GameState {
+  return {
     ...state,
-    pool: { A: 0, B: 0, C: 0 },
-    mount: { A: 0, B: 0, C: 0 },
-    whists: {
-      A: { A: 0, B: 0, C: 0 },
-      B: { A: 0, B: 0, C: 0 },
-      C: { A: 0, B: 0, C: 0 },
-    },
-    firstHand: deals.length > 0 ? deals[0].firstHand : state.firstHand,
+    pool: zeroScores(),
+    mount: zeroScores(),
+    whists: zeroWhists(),
+    firstHand: firstHand ?? state.firstHand,
     raspasState: 'normal',
-    eightRaspasCounter: { A: 0, B: 0, C: 0 },
+    eightRaspasCounter: zeroScores(),
     deals: [],
+    lastDelta: undefined,
   }
-  return deals.reduce(applyDeal, initialState)
+}
+
+// Пересчитать состояние партии из истории сдач — deals[] единственный источник
+// истины, pool/mount/whists это кеш. Вызывается при каждой загрузке партии.
+export function recomputeState(game: GameState): GameState {
+  if (game.deals.length === 0) return game
+  return game.deals.reduce(applyDeal, emptyStateFrom(game, game.deals[0].firstHand))
 }
 
 // Проверка: закрыта ли пуля у игрока
@@ -127,5 +138,5 @@ export function isPoolClosed(state: GameState, player: PlayerId): boolean {
 
 // Все ли пули закрыты
 export function isGameFinished(state: GameState): boolean {
-  return PLAYERS.every((p) => isPoolClosed(state, p))
+  return seatsOf(state).every((p) => isPoolClosed(state, p))
 }

@@ -2,10 +2,10 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Deal, GameState, PlayerId } from '../engine/types'
-import { applyDeal, undoLastDeal } from '../engine'
+import type { Deal, GameState, PlayerId, Seats } from '../engine/types'
+import { applyDeal, undoLastDeal, recomputeState } from '../engine'
 import { uploadGame, type UploadResult } from '../supabase/sync'
-import { PLAYERS } from '../engine/types'
+import { PLAYERS, zeroScores, zeroWhists } from '../engine/types'
 import { stashOrphan } from './orphans'
 import { setSyncState } from './sync-status'
 
@@ -113,20 +113,18 @@ const initialGameState = (
   players: Record<PlayerId, string>,
   poolLimit: number,
   firstHand: PlayerId,
+  seats: Seats = PLAYERS,
 ): GameState => ({
   players,
+  seats,
   poolLimit,
   createdAt: Date.now(),
-  pool: { A: 0, B: 0, C: 0 },
-  mount: { A: 0, B: 0, C: 0 },
-  whists: {
-    A: { A: 0, B: 0, C: 0 },
-    B: { A: 0, B: 0, C: 0 },
-    C: { A: 0, B: 0, C: 0 },
-  },
+  pool: zeroScores(),
+  mount: zeroScores(),
+  whists: zeroWhists(),
   firstHand,
   raspasState: 'normal',
-  eightRaspasCounter: { A: 0, B: 0, C: 0 },
+  eightRaspasCounter: zeroScores(),
   deals: [],
 })
 
@@ -165,22 +163,7 @@ export const useGameStore = create<Store>()(
         // Пересчитываем state из deals по актуальной логике движка (на случай изменения правил).
         // Загруженный из облака state мог быть с багами — deals[] это единственный источник истины.
         if (game.deals.length > 0) {
-          const initial: GameState = {
-            ...game,
-            pool: { A: 0, B: 0, C: 0 },
-            mount: { A: 0, B: 0, C: 0 },
-            whists: {
-              A: { A: 0, B: 0, C: 0 },
-              B: { A: 0, B: 0, C: 0 },
-              C: { A: 0, B: 0, C: 0 },
-            },
-            firstHand: game.deals[0].firstHand,
-            raspasState: 'normal',
-            eightRaspasCounter: { A: 0, B: 0, C: 0 },
-            deals: [],
-            lastDelta: undefined,
-          }
-          const recalculated = game.deals.reduce(applyDeal, initial)
+          const recalculated = recomputeState(game)
           set({ game: recalculated, gameId: id, redoStack: [], viewIndex: null })
           // Пересчитанный кеш возвращаем в облако — формулы движка могли измениться.
           // Завершённую партию БД менять не даёт, её просто помечаем как сохранённую.
@@ -277,24 +260,7 @@ export const useGameStore = create<Store>()(
         if (!get().redoStack) set({ redoStack: [] })
         const g = get().game
         if (!g || g.deals.length === 0) return
-        const deals = g.deals
-        const initial: GameState = {
-          ...g,
-          pool: { A: 0, B: 0, C: 0 },
-          mount: { A: 0, B: 0, C: 0 },
-          whists: {
-            A: { A: 0, B: 0, C: 0 },
-            B: { A: 0, B: 0, C: 0 },
-            C: { A: 0, B: 0, C: 0 },
-          },
-          firstHand: deals[0].firstHand,
-          raspasState: 'normal',
-          eightRaspasCounter: { A: 0, B: 0, C: 0 },
-          deals: [],
-          lastDelta: undefined,
-        }
-        const recalculated = deals.reduce(applyDeal, initial)
-        set({ game: recalculated })
+        set({ game: recomputeState(g) })
       },
     }),
     {
@@ -306,22 +272,7 @@ export const useGameStore = create<Store>()(
       // Это гарантирует правильные числа даже при изменениях движка расчёта.
       onRehydrateStorage: () => (state) => {
         if (!state?.game || state.game.deals.length === 0) return
-        const deals = state.game.deals
-        const initial: GameState = {
-          ...state.game,
-          pool: { A: 0, B: 0, C: 0 },
-          mount: { A: 0, B: 0, C: 0 },
-          whists: {
-            A: { A: 0, B: 0, C: 0 },
-            B: { A: 0, B: 0, C: 0 },
-            C: { A: 0, B: 0, C: 0 },
-          },
-          firstHand: deals[0].firstHand,
-          raspasState: 'normal',
-          eightRaspasCounter: { A: 0, B: 0, C: 0 },
-          deals: [],
-        }
-        state.game = deals.reduce(applyDeal, initial)
+        state.game = recomputeState(state.game)
       },
     },
   ),

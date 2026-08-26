@@ -1,8 +1,8 @@
 // Движок расчёта одной сдачи → изменения в пуле/горе/вистах
 // См. SPEC.md разделы 3-6
 
-import type { Deal, DealDelta, PlayerId, GameLevel } from './types'
-import { PLAYERS } from './types'
+import type { Deal, DealDelta, PlayerId, GameLevel, Seats } from './types'
+import { PLAYERS, zeroScores } from './types'
 import {
   POOL_COST,
   MISERE_POOL_COST,
@@ -16,27 +16,31 @@ import {
 
 function emptyDelta(): DealDelta {
   return {
-    pool: { A: 0, B: 0, C: 0 },
-    mount: { A: 0, B: 0, C: 0 },
+    pool: zeroScores(),
+    mount: zeroScores(),
     whists: [],
   }
 }
 
-// Список вистующих (двое, кроме играющего)
-function visters(player: PlayerId): PlayerId[] {
-  return PLAYERS.filter((p) => p !== player)
+// Список вистующих — всегда двое.
+// Втроём это все, кроме играющего. Вчетвером сдающий вне розыгрыша (он раздал
+// 10-10-10 и прикуп, себе карт не оставил), поэтому исключается тоже.
+function visters(deal: { player: PlayerId; dealer: PlayerId }, seats: Seats): PlayerId[] {
+  return seats.filter(
+    (p) => p !== deal.player && (seats.length < 4 || p !== deal.dealer),
+  )
 }
 
 // Расчёт «Игра» (сыграна или ремиз)
-function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
+function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats): DealDelta {
   const delta = emptyDelta()
   if (deal.contract.kind !== 'game') return delta // защита от неправильного заказа
   const level = deal.contract.level
   const suit = deal.contract.suit
   const player = deal.player
-  const vs = visters(player)
+  const vs = visters(deal, seats)
 
-  const vTricksTotal = vs.reduce((sum, v) => sum + deal.vistersTricks[v], 0)
+  const vTricksTotal = vs.reduce((sum, v) => sum + (deal.vistersTricks[v] ?? 0), 0)
   const playerTricks = deal.playerTricks
 
   // Сталинград: на 6♠ оба вистующих ОБЯЗАНЫ вистовать — принудительно ставим 'vist'
@@ -88,7 +92,7 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
   } else if (activeVisters.length === 2) {
     // Оба вистуют — каждый за свои личные взятки
     activeVisters.forEach((v) => {
-      const myTricks = deal.vistersTricks[v]
+      const myTricks = deal.vistersTricks[v] ?? 0
       if (myTricks > 0) {
         delta.whists.push({ from: v, to: player, amount: myTricks * VIST_PER_TRICK[level] })
       }
@@ -100,7 +104,7 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
       if (duty >= 2) {
         const dutyPerPlayer = duty / 2
         activeVisters.forEach((v) => {
-          const myTricks = deal.vistersTricks[v]
+          const myTricks = deal.vistersTricks[v] ?? 0
           if (myTricks < dutyPerPlayer) {
             const myShort = dutyPerPlayer - myTricks
             delta.mount[v] += myShort * VISTER_PENALTY_PER_MISS[level]
@@ -154,16 +158,16 @@ function calcMisere(deal: Extract<Deal, { type: 'misere' }>): DealDelta {
 // Правило Андрея: игрок, взявший 0 взяток на распасе, списывает с горы
 // удвоенную цену распаса (для 1-го = −4, 2-го = −8, 8-мерного = −12).
 // Списание не может увести гору ниже нуля (обрежется в applyDeal через state).
-function calcRaspas(deal: Extract<Deal, { type: 'raspas' }>): DealDelta {
+function calcRaspas(deal: Extract<Deal, { type: 'raspas' }>, seats: Seats): DealDelta {
   const delta = emptyDelta()
   const cost = RASPAS_TRICK_COST[deal.level]
   const tricks = deal.tricks
-  const min = Math.min(tricks.A, tricks.B, tricks.C)
-  PLAYERS.forEach((p) => {
-    const extra = tricks[p] - min
+  const min = Math.min(...seats.map((p) => tricks[p] ?? 0))
+  seats.forEach((p) => {
+    const extra = (tricks[p] ?? 0) - min
     if (extra > 0) delta.mount[p] += extra * cost
     // Бонус за «чистый» распас (0 взяток): -2*cost с горы
-    if (tricks[p] === 0) {
+    if ((tricks[p] ?? 0) === 0) {
       delta.mount[p] -= 2 * cost
     }
   })
@@ -180,15 +184,16 @@ function calcGiveup(deal: Extract<Deal, { type: 'giveup' }>): DealDelta {
   return delta
 }
 
-// Основная функция
-export function calcDeal(deal: Deal): DealDelta {
+// Основная функция. seats по умолчанию — стол на троих, как во всех партиях,
+// сыгранных до появления четвёртого игрока.
+export function calcDeal(deal: Deal, seats: Seats = PLAYERS): DealDelta {
   switch (deal.type) {
     case 'game':
-      return calcGame(deal)
+      return calcGame(deal, seats)
     case 'misere':
       return calcMisere(deal)
     case 'raspas':
-      return calcRaspas(deal)
+      return calcRaspas(deal, seats)
     case 'giveup':
       return calcGiveup(deal)
   }

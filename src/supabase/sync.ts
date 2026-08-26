@@ -3,8 +3,8 @@
 // При изменении локально → upsert в облако. При загрузке — pull всех игр пользователя.
 
 import { supabase } from './client'
-import type { GameState, Deal } from '../engine/types'
-import { applyDeal } from '../engine'
+import type { GameState, Deal, Seats } from '../engine/types'
+import { recomputeState } from '../engine'
 
 interface CloudGame {
   id: string
@@ -21,6 +21,9 @@ interface CloudGame {
     eightRaspasCounter: Record<string, number>
     deals: Deal[]
     finishedManually?: boolean
+    // Места за столом. У партий, записанных до появления игры вчетвером,
+    // поля нет — это стол на троих (см. seatsOf).
+    seats?: Seats
   }
   finished: boolean
   finished_at: string | null
@@ -39,6 +42,7 @@ function toCloudState(game: GameState) {
     eightRaspasCounter: game.eightRaspasCounter,
     deals: game.deals,
     finishedManually: game.finishedManually,
+    seats: game.seats,
     // lastDelta не сохраняем, он вычисляется
   }
 }
@@ -57,6 +61,7 @@ function fromCloud(cloud: CloudGame): GameState {
     eightRaspasCounter: cloud.state.eightRaspasCounter as GameState['eightRaspasCounter'],
     deals: cloud.state.deals,
     finishedManually: cloud.state.finishedManually,
+    seats: cloud.state.seats,
   }
 }
 
@@ -142,26 +147,6 @@ export async function fetchGamesResult(): Promise<GamesFetch> {
 // Короткая форма — когда разница «пусто / нет связи» не важна
 export async function fetchGames(): Promise<{ id: string; game: GameState; finished: boolean }[]> {
   return (await fetchGamesResult()).items
-}
-
-// Пересчитать state из deals[] — гарантирует что pool/mount/whists соответствуют актуальной логике движка
-function recomputeState(game: GameState): GameState {
-  const initial: GameState = {
-    ...game,
-    pool: { A: 0, B: 0, C: 0 },
-    mount: { A: 0, B: 0, C: 0 },
-    whists: {
-      A: { A: 0, B: 0, C: 0 },
-      B: { A: 0, B: 0, C: 0 },
-      C: { A: 0, B: 0, C: 0 },
-    },
-    firstHand: game.deals[0].firstHand,
-    raspasState: 'normal',
-    eightRaspasCounter: { A: 0, B: 0, C: 0 },
-    deals: [],
-    lastDelta: undefined,
-  }
-  return game.deals.reduce(applyDeal, initial)
 }
 
 // Удалить игру

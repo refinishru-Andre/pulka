@@ -31,17 +31,17 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
   const [stalingrad, setStalingrad] = useState(false)
   const [gamePlayerTricks, setGamePlayerTricks] = useState<number>(initialLevel)
   const [gameVisterTricks, setGameVisterTricks] = useState<Record<PlayerId, number>>({
-    A: 0, B: 0, C: 0,
+    A: 0, B: 0, C: 0, D: 0,
   })
   const [gameVistDecisions, setGameVistDecisions] = useState<Record<PlayerId, VistDecision>>({
-    A: 'vist', B: 'vist', C: 'vist',
+    A: 'vist', B: 'vist', C: 'vist', D: 'vist',
   })
 
   const [misPlayer, setMisPlayer] = useState<PlayerId>('A')
   const [misTricks, setMisTricks] = useState(0)
 
   const [raspasTricks, setRaspasTricks] = useState<Record<PlayerId, number>>({
-    A: 0, B: 0, C: 0,
+    A: 0, B: 0, C: 0, D: 0,
   })
 
   const [giveupPlayer, setGiveupPlayer] = useState<PlayerId>('A')
@@ -79,7 +79,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
           contract,
           // Для автомат-сценариев ставим playerTricks=level и vistersTricks=0
           playerTricks: isAuto ? gameLevel : gamePlayerTricks,
-          vistersTricks: isAuto ? { A: 0, B: 0, C: 0 } : gameVisterTricks,
+          vistersTricks: isAuto ? { A: 0, B: 0, C: 0, D: 0 } : gameVisterTricks,
           vistDecisions: gameVistDecisions,
         }),
       }
@@ -285,7 +285,7 @@ function GameFormFields(props: {
               key={p}
               onClick={() => {
                 setGamePlayer(p)
-                setGameVisterTricks({ A: 0, B: 0, C: 0 })
+                setGameVisterTricks({ A: 0, B: 0, C: 0, D: 0 })
               }}
               className={`py-2 rounded-lg font-semibold ${
                 gamePlayer === p ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
@@ -353,7 +353,7 @@ function GameFormFields(props: {
                 key={i}
                 onClick={() => {
                   setGamePlayerTricks(i)
-                  setGameVisterTricks({ A: 0, B: 0, C: 0 })
+                  setGameVisterTricks({ A: 0, B: 0, C: 0, D: 0 })
                 }}
                 className={`py-2 rounded-lg font-semibold text-sm ${
                   gamePlayerTricks === i ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'

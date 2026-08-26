@@ -30,7 +30,11 @@ const mAC = { x: (A.x + C.x) / 2, y: (A.y + C.y) / 2 }
 const mBC = { x: (B.x + C.x) / 2, y: (B.y + C.y) / 2 }
 
 // Секторы (четырёхугольники) для каждого игрока
-const SECTORS: Record<PlayerId, { x: number; y: number }[]> = {
+// Треугольник — фигура для трёх игроков. Для стола на четверых нужна отдельная
+// раскладка (квадрат), она появится вместе с игрой вчетвером.
+type Seat3 = 'A' | 'B' | 'C'
+
+const SECTORS: Record<Seat3, { x: number; y: number }[]> = {
   A: [A, mAB, CENTER, mAC],
   B: [B, mBC, CENTER, mAB],
   C: [C, mAC, CENTER, mBC],
@@ -73,8 +77,8 @@ function whistPos(vertex: { x: number; y: number }, targetVertex: { x: number; y
   }
 }
 
-const NAMES_ORDER: PlayerId[] = ['A', 'B', 'C']
-const VERTEX: Record<PlayerId, { x: number; y: number }> = { A, B, C }
+const NAMES_ORDER: Seat3[] = ['A', 'B', 'C']
+const VERTEX: Record<Seat3, { x: number; y: number }> = { A, B, C }
 
 export function TrianglePool({ game, lastDelta, lastWhistDelta, netVists }: Props) {
   const sumPool = PLAYERS.reduce((s, p) => s + game.pool[p], 0)
@@ -233,7 +237,7 @@ export function TrianglePool({ game, lastDelta, lastWhistDelta, netVists }: Prop
       {/* Висты снаружи — 2 колонки у каждой вершины */}
       {NAMES_ORDER.map((p) => {
         const vertex = VERTEX[p]
-        const neighbors = PLAYERS.filter((o) => o !== p)
+        const neighbors = NAMES_ORDER.filter((o) => o !== p)
         return (
           <g key={`whists-${p}`}>
             {neighbors.map((target) => {
