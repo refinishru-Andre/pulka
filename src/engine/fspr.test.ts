@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { calcDeal } from './calc'
 import { applyDeal } from './index'
 import { nextRaspasState, nextFirstHand, minBidFor } from './raspas'
+import { settle } from './settle'
 import { HOME_RULES, FSPR_RULES } from './conventions'
 import type { Deal, GameState, PlayerId } from './types'
 import { PLAYERS, zeroScores, zeroWhists } from './types'
@@ -420,5 +421,69 @@ describe('Ручная корректировка', () => {
     expect(after.mount.B).toBe(10)
     expect(after.raspasState).toBe('afterFirst')
     expect(after.firstHand).toBe('B')
+  })
+})
+
+describe('Мини-партия вчетвером по турнирным правилам', () => {
+  it('считается от первой сдачи до итога и сходится в ноль', () => {
+    // Пуля без предела: играют по времени
+    let g: GameState = { ...fspr4(), poolLimit: null }
+    expect(g.firstHand).toBe('A')
+
+    // Сдача 1. Сдаёт D (он перед первой рукой), играет A семерную и берёт ровно 7.
+    // Вистуют B и C, берут 2 и 1. В прикупе был туз с королём одной масти.
+    g = applyDeal(g, {
+      type: 'game',
+      dealer: 'D',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 7 },
+      playerTricks: 7,
+      vistersTricks: { B: 2, C: 1 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+      prikupFastTricks: 2,
+    })
+    expect(g.pool.A).toBe(4) // сыгранная семерная
+    expect(g.whists.B.A).toBe(16) // 2 взятки x 8
+    expect(g.whists.C.A).toBe(8) // 1 взятка x 8
+    expect(g.whists.D.A).toBe(16) // премия сдатчику за прикуп: 2 x 8
+    expect(g.firstHand).toBe('B') // сдача пошла по часовой
+
+    // Сдача 2. Сдаёт A, играет B восьмерную и садится без двух.
+    // Вистуют C и D, берут по 2.
+    g = applyDeal(g, {
+      type: 'game',
+      dealer: 'A',
+      firstHand: 'B',
+      player: 'B',
+      contract: { kind: 'game', level: 8 },
+      playerTricks: 6,
+      vistersTricks: { C: 2, D: 2 },
+      vistDecisions: { C: 'vist', D: 'vist' },
+    })
+    expect(g.mount.B).toBe(24) // без двух x 12
+    expect(g.whists.C.B).toBe(24 + 24) // взятки 2x12 плюс консоляция 2x12
+    expect(g.whists.A.B).toBe(24) // сдатчику только консоляция за подсад
+
+    // Сдача 3. Все спасовали - распас. Сдаёт B, он же ходит прикупом.
+    g = applyDeal(g, {
+      type: 'raspas',
+      dealer: 'B',
+      firstHand: 'C',
+      level: 1,
+      tricks: { A: 4, B: 2, C: 4, D: 0 },
+    })
+    expect(g.mount.A).toBe(8) // 4 взятки x 2, без амнистии
+    expect(g.mount.C).toBe(8)
+    expect(g.mount.B).toBe(24 + 4) // сдатчик пишет свои 2 взятки прикупа наравне со всеми
+    expect(g.mount.D).toBe(-4) // ноль взяток: минус цена двух
+
+    // После распаса минимум встаёт на 7 и дальше не растёт
+    expect(g.raspasState).toBe('afterFirst')
+    expect(minBidFor(g.raspasState, FSPR_RULES)).toBe(7)
+
+    // Итог сходится: сумма балансов всех четверых равна нулю
+    const net = settle(g).net
+    expect(net.A + net.B + net.C + net.D).toBe(0)
   })
 })
