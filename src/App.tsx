@@ -5,10 +5,11 @@ import { Table } from './screens/Table'
 import { Login } from './screens/Login'
 import { GamesList } from './screens/GamesList'
 import { Stats } from './screens/Stats'
+import { Calculator } from './screens/Calculator'
 import { supabase } from './supabase/client'
 import type { User } from '@supabase/supabase-js'
 
-type Screen = 'games' | 'newGame' | 'table' | 'stats'
+type Screen = 'games' | 'newGame' | 'table' | 'stats' | 'calc'
 
 export default function App() {
   const game = useGameStore((s) => s.game)
@@ -67,12 +68,15 @@ export default function App() {
       content = <NewGame onCancel={() => setScreen('games')} onCreated={() => setScreen('table')} />
     } else if (screen === 'stats') {
       content = <Stats onBack={() => setScreen('games')} />
+    } else if (screen === 'calc') {
+      content = <Calculator onBack={() => setScreen('games')} />
     } else {
       content = (
         <GamesList
           onOpenGame={() => setScreen('table')}
           onNewGame={() => setScreen('newGame')}
           onOpenStats={() => setScreen('stats')}
+          onOpenCalc={() => setScreen('calc')}
         />
       )
     }
