@@ -26,9 +26,10 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
   const initialLevel = Math.max(6, minBid) as GameLevel
   const [gamePlayer, setGamePlayer] = useState<PlayerId>('A')
   const [gameLevel, setGameLevel] = useState<GameLevel>(initialLevel)
-  // Масть не спрашиваем — она не влияет ни на одну формулу.
-  // Единственное исключение: 6♠ (Сталинград), где вистуют оба.
-  const [stalingrad, setStalingrad] = useState(false)
+  // Масть не спрашиваем и не храним — она не влияет ни на одну формулу.
+  // Сталинград (6♠, оба обязаны вистовать) тоже не отмечаем: мы записываем ИТОГ
+  // сдачи, а не торговлю. Раз оба обязаны — оба и вистовали, так и ставим руками.
+  // Отдельного признака для этого не нужно (решение Андрея, 2026-08-26).
   const [gamePlayerTricks, setGamePlayerTricks] = useState<number>(initialLevel)
   const [gameVisterTricks, setGameVisterTricks] = useState<Record<PlayerId, number>>({
     A: 0, B: 0, C: 0, D: 0,
@@ -51,24 +52,17 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
   const { canSubmit, buildDeal } = useMemo(() => {
     if (dealType === 'game') {
       const visters = PLAYERS.filter((p) => p !== gamePlayer)
-      // Сталинград форсирует вист обоих на 6♠
-      const isStalingrad = gameLevel === 6 && stalingrad
-      const effectiveDecisions = isStalingrad
-        ? { ...gameVistDecisions, ...Object.fromEntries(visters.map((v) => [v, 'vist' as const])) }
-        : gameVistDecisions
       // Автомат-сценарии: оба пас; или полвиста + пас
-      const allPass = visters.every((v) => effectiveDecisions[v] === 'pass')
+      const allPass = visters.every((v) => gameVistDecisions[v] === 'pass')
       const halfAndPass =
-        visters.some((v) => effectiveDecisions[v] === 'half') &&
-        visters.some((v) => effectiveDecisions[v] === 'pass') &&
+        visters.some((v) => gameVistDecisions[v] === 'half') &&
+        visters.some((v) => gameVistDecisions[v] === 'pass') &&
         (gameLevel === 6 || gameLevel === 7)
       const isAuto = allPass || halfAndPass
       const vTotal = visters.reduce((s, v) => s + gameVisterTricks[v], 0)
       const need = 10 - gamePlayerTricks
       const ok = isAuto || vTotal === need
-      const contract: Contract = isStalingrad
-        ? { kind: 'game', level: 6, suit: 'S' }
-        : { kind: 'game', level: gameLevel }
+      const contract: Contract = { kind: 'game', level: gameLevel }
       return {
         canSubmit: ok,
         buildDeal: (): Deal => ({
@@ -122,7 +116,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
       }),
     }
   }, [
-    dealType, game.firstHand, gamePlayer, gameLevel, stalingrad, gamePlayerTricks,
+    dealType, game.firstHand, gamePlayer, gameLevel, gamePlayerTricks,
     gameVisterTricks, gameVistDecisions, misPlayer, misTricks,
     raspasTricks, raspasState, giveupPlayer, giveupLevel,
   ])
@@ -182,8 +176,6 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
               setGamePlayer={setGamePlayer}
               gameLevel={gameLevel}
               setGameLevel={setGameLevel}
-              stalingrad={stalingrad}
-              setStalingrad={setStalingrad}
               gamePlayerTricks={gamePlayerTricks}
               setGamePlayerTricks={setGamePlayerTricks}
               gameVisterTricks={gameVisterTricks}
@@ -241,8 +233,6 @@ function GameFormFields(props: {
   setGamePlayer: (p: PlayerId) => void
   gameLevel: GameLevel
   setGameLevel: (l: GameLevel) => void
-  stalingrad: boolean
-  setStalingrad: (v: boolean) => void
   gamePlayerTricks: number
   setGamePlayerTricks: (n: number) => void
   gameVisterTricks: Record<PlayerId, number>
@@ -252,7 +242,7 @@ function GameFormFields(props: {
 }) {
   const game = useGameStore((s) => s.game)!
   const {
-    minBid, gamePlayer, setGamePlayer, gameLevel, setGameLevel, stalingrad, setStalingrad,
+    minBid, gamePlayer, setGamePlayer, gameLevel, setGameLevel,
     gamePlayerTricks, setGamePlayerTricks, gameVisterTricks, setGameVisterTricks,
     gameVistDecisions, setGameVistDecisions,
   } = props
@@ -262,15 +252,11 @@ function GameFormFields(props: {
   const entered = visters.reduce((s, v) => s + gameVisterTricks[v], 0)
   const tricksOk = entered === need
   const availableLevels = GAME_LEVELS.filter((l) => l >= minBid)
-  const isStalingrad = gameLevel === 6 && stalingrad
   // Автомат-сценарии: без розыгрыша, играющему пуля автоматом
-  const effVistDecisions = isStalingrad
-    ? { ...gameVistDecisions, ...Object.fromEntries(visters.map((v) => [v, 'vist' as const])) }
-    : gameVistDecisions
-  const allPassAuto = visters.every((v) => effVistDecisions[v] === 'pass')
+  const allPassAuto = visters.every((v) => gameVistDecisions[v] === 'pass')
   const halfAndPassAuto =
-    visters.some((v) => effVistDecisions[v] === 'half') &&
-    visters.some((v) => effVistDecisions[v] === 'pass') &&
+    visters.some((v) => gameVistDecisions[v] === 'half') &&
+    visters.some((v) => gameVistDecisions[v] === 'pass') &&
     (gameLevel === 6 || gameLevel === 7)
   const isAuto = allPassAuto || halfAndPassAuto
 
@@ -297,18 +283,14 @@ function GameFormFields(props: {
         </div>
       </div>
 
-      {/* Заказ. Масть не спрашиваем — на расчёт влияет только уровень 6–10.
-          Выбор есть лишь на шестерной: 6♠ = Сталинград, вистуют оба. */}
+      {/* Заказ. Масть не спрашиваем — на расчёт влияет только уровень 6–10. */}
       <div>
         <div className="text-xs text-slate-400 mb-1">Заказ</div>
         <div className="grid grid-cols-5 gap-2">
           {availableLevels.map((l) => (
             <button
               key={l}
-              onClick={() => {
-                setGameLevel(l)
-                if (l !== 6) setStalingrad(false)
-              }}
+              onClick={() => setGameLevel(l)}
               className={`py-3 rounded-lg font-bold text-lg ${
                 gameLevel === l ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
               }`}
@@ -317,26 +299,6 @@ function GameFormFields(props: {
             </button>
           ))}
         </div>
-        {gameLevel === 6 && (
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <button
-              onClick={() => setStalingrad(false)}
-              className={`py-3 rounded-lg font-semibold ${
-                !stalingrad ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
-              }`}
-            >
-              Обычная шестерная
-            </button>
-            <button
-              onClick={() => setStalingrad(true)}
-              className={`py-3 rounded-lg font-semibold ${
-                stalingrad ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
-              }`}
-            >
-              ♠ Сталинград
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Взятки играющего — только если требуется розыгрыш */}
@@ -368,20 +330,15 @@ function GameFormFields(props: {
 
       {/* Вистовали */}
       <div>
-        <div className="text-xs text-slate-400 mb-1">
-          Как вистовали
-          {isStalingrad && (
-            <span className="ml-2 text-yellow-500 font-semibold">· Сталинград: оба обязаны</span>
-          )}
-        </div>
+        <div className="text-xs text-slate-400 mb-1">Как вистовали</div>
         <div className="space-y-1">
           {visters.map((v) => {
-            const effective = isStalingrad ? 'vist' : gameVistDecisions[v]
+            const effective = gameVistDecisions[v]
             return (
               <div key={v} className="grid grid-cols-4 gap-2 items-center">
                 <div className="font-semibold text-sm">{game.players[v]}</div>
                 {(['vist', 'pass', 'half'] as VistDecision[]).map((d) => {
-                  const disabled = (d === 'half' && gameLevel > 7) || (isStalingrad && d !== 'vist')
+                  const disabled = d === 'half' && gameLevel > 7
                   return (
                     <button
                       key={d}
