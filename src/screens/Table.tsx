@@ -275,7 +275,7 @@ export function Table({ onBack }: Props = {}) {
                   }}
                   className="px-5 py-3 bg-amber-600 hover:bg-amber-500 rounded-lg text-base font-bold"
                 >
-                  Да, завершить
+                  Да, рассчитать
                 </button>
                 <button
                   onClick={() => setConfirmFinish(false)}
@@ -288,9 +288,9 @@ export function Table({ onBack }: Props = {}) {
               <button
                 onClick={() => setConfirmFinish(true)}
                 className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-                title="Пометить партию как завершённую"
+                title="Зафиксировать итог на текущий момент. Пуля закрыта или нет — неважно: считаем по последней сдаче. После расчёта партия не меняется."
               >
-                🏁 Завершить
+                🏁 Рассчитать партию
               </button>
             ))}
           {confirmReset ? (
@@ -315,8 +315,9 @@ export function Table({ onBack }: Props = {}) {
             <button
               onClick={() => setConfirmReset(true)}
               className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+              title="Текущая партия останется незавершённой в списке — её можно открыть и доиграть позже."
             >
-              Новая игра
+              Отложить и начать новую
             </button>
           )}
         </div>
