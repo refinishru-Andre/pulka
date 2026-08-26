@@ -5,6 +5,13 @@ import { describe, it, expect } from 'vitest'
 import { calcDeal } from './calc'
 import { applyDeal, recomputeState, freezeGame } from './index'
 import { settle, calcNet } from './settle'
+import {
+  rulesOf, ladderAt, halfVistTricks, HOME_RULES, FSPR_RULES,
+} from './conventions'
+import {
+  POOL_COST, MOUNT_PENALTY, VIST_PER_TRICK, VISTERS_DUTY, VISTER_PENALTY_PER_MISS,
+  MISERE_POOL_COST, MISERE_TRICK_PENALTY, RASPAS_TRICK_COST,
+} from './rules'
 import { nextRaspasState, nextFirstHand, updateEightCounter, isEightRaspasFullCircle } from './raspas'
 import type { Deal, GameState, PlayerId } from './types'
 import { PLAYERS, zeroScores, zeroWhists } from './types'
@@ -970,5 +977,60 @@ describe('Вмороженная партия не пересчитываетс�
     expect(once.frozenAt).toBe(111)
     const twice = freezeGame(once, 222)
     expect(twice.frozenAt).toBe(111) // повторная заморозка не сдвигает дату
+  })
+})
+
+// ============================================================================
+// Конвенции: каркас
+// ============================================================================
+
+describe('Конвенции партии', () => {
+  it('партия без правил считается по пресету «Дом»', () => {
+    expect(rulesOf(initState()).id).toBe('home')
+  })
+
+  it('пресет «Дом» совпадает с константами, по которым считались старые партии', () => {
+    // Если это разойдётся — старые партии посчитаются по-другому. Тест ровно об этом.
+    expect(HOME_RULES.poolCost).toEqual(POOL_COST)
+    expect(HOME_RULES.mountPenalty).toEqual(MOUNT_PENALTY)
+    expect(HOME_RULES.vistPerTrick).toEqual(VIST_PER_TRICK)
+    expect(HOME_RULES.vistersDuty).toEqual(VISTERS_DUTY)
+    expect(HOME_RULES.visterPenaltyPerMiss).toEqual(VISTER_PENALTY_PER_MISS)
+    expect(HOME_RULES.miserePoolCost).toBe(MISERE_POOL_COST)
+    expect(HOME_RULES.misereTrickPenalty).toBe(MISERE_TRICK_PENALTY)
+    // Лесенки: цена взятки на распасах и минимальный заказ
+    expect([1, 2, 3].map((l) => ladderAt(HOME_RULES.raspasCostLadder, l - 1))).toEqual([
+      RASPAS_TRICK_COST[1], RASPAS_TRICK_COST[2], RASPAS_TRICK_COST[3],
+    ])
+    expect([0, 1, 2].map((s) => ladderAt(HOME_RULES.minBidLadder, s))).toEqual([6, 7, 8])
+  })
+
+  it('лесенка: последнее значение повторяется дальше', () => {
+    // Пятый распас подряд стоит столько же, сколько третий
+    expect(ladderAt(HOME_RULES.raspasCostLadder, 4)).toBe(6)
+    expect(ladderAt(HOME_RULES.minBidLadder, 9)).toBe(8) // дом: 6-7-8-8-8…
+    expect(ladderAt(FSPR_RULES.minBidLadder, 9)).toBe(7) // турнир: 6-7-7-7…
+  })
+
+  it('полвиста = половина нормы пары', () => {
+    expect(halfVistTricks(HOME_RULES, 6)).toBe(2)
+    expect(halfVistTricks(HOME_RULES, 7)).toBe(1)
+    // «Уход второго за две (6-я) / за одну (7-я)» — то же самое
+    expect(halfVistTricks(FSPR_RULES, 6)).toBe(2)
+    expect(halfVistTricks(FSPR_RULES, 7)).toBe(1)
+  })
+
+  it('турнир и дом расходятся именно там, где мы договорились', () => {
+    expect(FSPR_RULES.vistStyle).toBe('gentleman')
+    expect(HOME_RULES.vistStyle).toBe('zhlob')
+    expect(FSPR_RULES.vistersDuty[10]).toBe(1) // десятерная вистуется
+    expect(HOME_RULES.vistersDuty[10]).toBe(0) // дома проверяется
+    expect(FSPR_RULES.raspasWriteEveryTrick).toBe(true)
+    expect(HOME_RULES.raspasWriteEveryTrick).toBe(false)
+    expect(FSPR_RULES.misereBreaksRaspas).toBe(false)
+    expect(HOME_RULES.misereBreaksRaspas).toBe(true)
+    expect(FSPR_RULES.allowGiveup).toBe(false)
+    expect(FSPR_RULES.prikupBonus).toBe(true)
+    expect(FSPR_RULES.poolLimit).toBeNull() // играют на время
   })
 })

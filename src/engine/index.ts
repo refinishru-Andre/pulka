@@ -5,6 +5,7 @@ export * from './rules'
 export * from './calc'
 export * from './settle'
 export * from './raspas'
+export * from './conventions'
 
 import type { Deal, GameState, PlayerId, DealDelta } from './types'
 import { calcDeal } from './calc'
