@@ -129,22 +129,21 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
   // Это «ответственность». Полуответственный вист = половина цены игры за
   // каждую недобранную взятку (у нас это и есть perMiss). Платят только те, кто
   // вистовал: пасовавший в недоборе не виноват.
+  //
+  // От стиля виста штраф НЕ зависит: это разные оси. Каждый вистовавший пишет за
+  // себя. На 8-9-10, где норма пары всего одна взятка и «ответственность несут
+  // оба», каждый взявший ноль пишет ПОЛНУЮ половину стоимости игры (на восьмерной
+  // по 6, а не по 3 на брата) — подтверждено разбором питерских правил.
   if (vTricksTotal < duty && activeVisters.length > 0) {
-    if (rules.vistStyle === 'gentleman') {
-      // Раз висты общие — и недобор общий: делится между вистовавшими
-      const shortPerPlayer = (duty - vTricksTotal) / activeVisters.length
-      activeVisters.forEach((v) => {
-        if (paysForMiss(v)) delta.mount[v] += shortPerPlayer * perMiss
-      })
-    } else if (activeVisters.length === 1) {
+    if (activeVisters.length === 1) {
       // Один вистовал за пару — на нём весь недобор пары
       const solo = activeVisters[0]
       if (paysForMiss(solo)) delta.mount[solo] += (duty - vTricksTotal) * perMiss
     } else {
-      // Жлобский, вистуют оба — «пол взятки не считается».
+      // Вистуют оба — «пол взятки не считается».
       // Норма пары ≥ 2 (6-я, 7-я): у каждого своя норма duty/2, штраф тому, кто
-      // недобрал СВОЮ. Норма пары = 1 (8-я, 9-я): штраф каждому, кто лично взял
-      // ноль, и на целую взятку.
+      // недобрал СВОЮ. Норма пары = 1 (8-я, 9-я, а в турнире и 10-я): штраф
+      // каждому, кто лично взял ноль, и на целую взятку.
       if (duty >= 2) {
         const dutyPerPlayer = duty / 2
         activeVisters.forEach((v) => {

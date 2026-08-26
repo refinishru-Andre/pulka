@@ -87,6 +87,41 @@ describe('ФСПР: вист джентльменский', () => {
     expect(h.whists.find((w) => w.from === 'C')).toBeUndefined()
   })
 
+  it('на восьмерной оба вистующих платят по ПОЛНОЙ половине цены игры', () => {
+    // Норма пары на восьмерной — 1 взятка. Пара не взяла ни одной.
+    // Каждый пишет 6 (половина от 12 — целой цены восьмерной в горе),
+    // а не по 3 на брата. Штраф от стиля виста не зависит.
+    const deal8: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 8 },
+      playerTricks: 10,
+      vistersTricks: { B: 0, C: 0 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+    }
+    expect(calcDeal(deal8, PLAYERS, FSPR_RULES).mount.B).toBe(6)
+    expect(calcDeal(deal8, PLAYERS, FSPR_RULES).mount.C).toBe(6)
+    // и дома ровно столько же — это общее питерское правило, не турнирное
+    expect(calcDeal(deal8, PLAYERS, HOME_RULES).mount.B).toBe(6)
+  })
+
+  it('на десятерной так же — в турнире она вистуется, дома проверяется', () => {
+    const deal10: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 10 },
+      playerTricks: 10,
+      vistersTricks: { B: 0, C: 0 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+    }
+    expect(calcDeal(deal10, PLAYERS, FSPR_RULES).mount.B).toBe(10) // половина от 20
+    expect(calcDeal(deal10, PLAYERS, HOME_RULES).mount.B).toBe(0) // нормы нет
+  })
+
   it('но штраф за недобор платит только вистовавший — пасовавший не виноват', () => {
     // Норма пары на семерной 2, пара взяла 0
     const oneVists: Deal = {
