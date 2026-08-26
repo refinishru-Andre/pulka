@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
 import type { Deal, PlayerId, GameLevel, VistDecision, Contract, RaspasState } from '../engine/types'
-import { PLAYERS } from '../engine/types'
-import { raspasLevelFor, RASPAS_TRICK_COST } from '../engine'
+import { seatsOf } from '../engine/types'
+import { raspasLevelFor, raspasCostFor, prevClockwise, rulesOf, halfVistTricks } from '../engine'
 
 type DealType = 'game' | 'misere' | 'raspas' | 'giveup'
 
@@ -20,11 +20,19 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
   const game = useGameStore((s) => s.game)!
   const addDeal = useGameStore((s) => s.addDeal)
 
+  // Кто за столом и по каким правилам считаем — берём из партии
+  const seats = seatsOf(game)
+  const rules = rulesOf(game)
+  const dealer = prevClockwise(game.firstHand, seats)
   const [dealType, setDealType] = useState<DealType>('game')
 
   // Состояние всех форм — поднято сюда, чтобы submit-кнопка могла быть в footer
   const initialLevel = Math.max(6, minBid) as GameLevel
-  const [gamePlayer, setGamePlayer] = useState<PlayerId>('A')
+  const [gamePlayer, setGamePlayer] = useState<PlayerId>(game.firstHand)
+  // Вчетвером сдающий может вступить вистующим при торговле «пас — полвиста — пас»
+  const [dealerVists, setDealerVists] = useState(false)
+  // «Быстрые взятки» в прикупе для премии сдатчику: Т/КД = 1, ТК = 2, два туза = 3
+  const [prikupFast, setPrikupFast] = useState(0)
   const [gameLevel, setGameLevel] = useState<GameLevel>(initialLevel)
   // Масть не спрашиваем и не храним — она не влияет ни на одну формулу.
   // Сталинград (6♠, оба обязаны вистовать) тоже не отмечаем: мы записываем ИТОГ
@@ -38,28 +46,28 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
     A: 'vist', B: 'vist', C: 'vist', D: 'vist',
   })
 
-  const [misPlayer, setMisPlayer] = useState<PlayerId>('A')
+  const [misPlayer, setMisPlayer] = useState<PlayerId>(game.firstHand)
   const [misTricks, setMisTricks] = useState(0)
 
   const [raspasTricks, setRaspasTricks] = useState<Record<PlayerId, number>>({
     A: 0, B: 0, C: 0, D: 0,
   })
 
-  const [giveupPlayer, setGiveupPlayer] = useState<PlayerId>('A')
+  const [giveupPlayer, setGiveupPlayer] = useState<PlayerId>(game.firstHand)
   const [giveupLevel, setGiveupLevel] = useState<GameLevel>(initialLevel)
 
   // Валидация и построение сдачи
   const { canSubmit, buildDeal } = useMemo(() => {
     if (dealType === 'game') {
-      const visters = PLAYERS.filter((p) => p !== gamePlayer)
-      // Автомат-сценарии: оба пас; или полвиста + пас
+      const visters = vistersFor(seats, dealer, gamePlayer, dealerVists)
+      // Автомат-сценарии: все вистующие пас; или полвиста + пас
       const allPass = visters.every((v) => gameVistDecisions[v] === 'pass')
       const halfAndPass =
         visters.some((v) => gameVistDecisions[v] === 'half') &&
         visters.some((v) => gameVistDecisions[v] === 'pass') &&
-        (gameLevel === 6 || gameLevel === 7)
+        rules.halfVistLevels.includes(gameLevel)
       const isAuto = allPass || halfAndPass
-      const vTotal = visters.reduce((s, v) => s + gameVisterTricks[v], 0)
+      const vTotal = visters.reduce((sum, v) => sum + gameVisterTricks[v], 0)
       const need = 10 - gamePlayerTricks
       const ok = isAuto || vTotal === need
       const contract: Contract = { kind: 'game', level: gameLevel }
@@ -67,14 +75,16 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         canSubmit: ok,
         buildDeal: (): Deal => ({
           type: 'game',
-          dealer: prevClockwise(game.firstHand),
+          dealer,
           firstHand: game.firstHand,
           player: gamePlayer,
           contract,
           // Для автомат-сценариев ставим playerTricks=level и vistersTricks=0
           playerTricks: isAuto ? gameLevel : gamePlayerTricks,
-          vistersTricks: isAuto ? { A: 0, B: 0, C: 0, D: 0 } : gameVisterTricks,
-          vistDecisions: gameVistDecisions,
+          // Пишем только участников сдачи, а не все четыре места
+          vistersTricks: pickBy(visters, (v) => (isAuto ? 0 : gameVisterTricks[v])),
+          vistDecisions: pickBy(visters, (v) => gameVistDecisions[v]),
+          ...(rules.prikupBonus && prikupFast > 0 ? { prikupFastTricks: prikupFast } : {}),
         }),
       }
     }
@@ -83,7 +93,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         canSubmit: true,
         buildDeal: (): Deal => ({
           type: 'misere',
-          dealer: prevClockwise(game.firstHand),
+          dealer,
           firstHand: game.firstHand,
           player: misPlayer,
           blind: false, // тип мизера не влияет на расчёт
@@ -92,15 +102,17 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
       }
     }
     if (dealType === 'raspas') {
-      const total = raspasTricks.A + raspasTricks.B + raspasTricks.C
+      // Вчетвером сдающий тоже берёт взятки — он ходит картами прикупа
+      const players = raspasPlayers(seats, dealer, rules.dealerPlaysRaspasPrikup)
+      const total = players.reduce((sum, p) => sum + raspasTricks[p], 0)
       return {
         canSubmit: total === 10,
         buildDeal: (): Deal => ({
           type: 'raspas',
-          dealer: prevClockwise(game.firstHand),
+          dealer,
           firstHand: game.firstHand,
           level: raspasLevelFor(raspasState),
-          tricks: raspasTricks,
+          tricks: pickBy(players, (p) => raspasTricks[p]),
         }),
       }
     }
@@ -109,14 +121,15 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
       canSubmit: true,
       buildDeal: (): Deal => ({
         type: 'giveup',
-        dealer: prevClockwise(game.firstHand),
+        dealer,
         firstHand: game.firstHand,
         player: giveupPlayer,
         contract: { kind: 'game', level: giveupLevel },
       }),
     }
   }, [
-    dealType, game.firstHand, gamePlayer, gameLevel, gamePlayerTricks,
+    dealType, game.firstHand, seats, dealer, rules, dealerVists, prikupFast,
+    gamePlayer, gameLevel, gamePlayerTricks,
     gameVisterTricks, gameVistDecisions, misPlayer, misTricks,
     raspasTricks, raspasState, giveupPlayer, giveupLevel,
   ])
@@ -147,8 +160,11 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
           </div>
 
           {/* Выбор типа */}
-          <div className="grid grid-cols-4 gap-2">
-            {(['game', 'misere', 'raspas', 'giveup'] as DealType[]).map((t) => (
+          <div className={`grid gap-2 ${rules.allowGiveup ? 'grid-cols-4' : 'grid-cols-3'}`}>
+            {(rules.allowGiveup
+              ? (['game', 'misere', 'raspas', 'giveup'] as DealType[])
+              : (['game', 'misere', 'raspas'] as DealType[])
+            ).map((t) => (
               <button
                 key={t}
                 onClick={() => setDealType(t)}
@@ -160,7 +176,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
               >
                 {t === 'game' && 'Игра'}
                 {t === 'misere' && 'Мизер'}
-                {t === 'raspas' && `Распас ${RASPAS_TRICK_COST[raspasLevelFor(raspasState)]}/вз`}
+                {t === 'raspas' && `Распас ${raspasCostFor(raspasState, rules)}/вз`}
                 {t === 'giveup' && 'Без 3'}
               </button>
             ))}
@@ -172,6 +188,10 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
           {dealType === 'game' && (
             <GameFormFields
               minBid={minBid}
+              dealerVists={dealerVists}
+              setDealerVists={setDealerVists}
+              prikupFast={prikupFast}
+              setPrikupFast={setPrikupFast}
               gamePlayer={gamePlayer}
               setGamePlayer={setGamePlayer}
               gameLevel={gameLevel}
@@ -229,6 +249,10 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
 
 function GameFormFields(props: {
   minBid: number
+  dealerVists: boolean
+  setDealerVists: (v: boolean) => void
+  prikupFast: number
+  setPrikupFast: (n: number) => void
   gamePlayer: PlayerId
   setGamePlayer: (p: PlayerId) => void
   gameLevel: GameLevel
@@ -242,12 +266,18 @@ function GameFormFields(props: {
 }) {
   const game = useGameStore((s) => s.game)!
   const {
-    minBid, gamePlayer, setGamePlayer, gameLevel, setGameLevel,
+    minBid, dealerVists, setDealerVists, prikupFast, setPrikupFast,
+    gamePlayer, setGamePlayer, gameLevel, setGameLevel,
     gamePlayerTricks, setGamePlayerTricks, gameVisterTricks, setGameVisterTricks,
     gameVistDecisions, setGameVistDecisions,
   } = props
 
-  const visters = PLAYERS.filter((p) => p !== gamePlayer)
+  const seats = seatsOf(game)
+  const rules = rulesOf(game)
+  const dealer = prevClockwise(game.firstHand, seats)
+  const fourHanded = seats.length === 4
+  const canPlay = seats.filter((p) => !fourHanded || p !== dealer)
+  const visters = vistersFor(seats, dealer, gamePlayer, dealerVists)
   const need = 10 - gamePlayerTricks
   const entered = visters.reduce((s, v) => s + gameVisterTricks[v], 0)
   const tricksOk = entered === need
@@ -257,16 +287,23 @@ function GameFormFields(props: {
   const halfAndPassAuto =
     visters.some((v) => gameVistDecisions[v] === 'half') &&
     visters.some((v) => gameVistDecisions[v] === 'pass') &&
-    (gameLevel === 6 || gameLevel === 7)
+    rules.halfVistLevels.includes(gameLevel)
   const isAuto = allPassAuto || halfAndPassAuto
 
   return (
     <div className="space-y-3">
       {/* Играющий */}
       <div>
-        <div className="text-xs text-slate-400 mb-1">Играющий</div>
-        <div className="grid grid-cols-3 gap-2">
-          {PLAYERS.map((p) => (
+        <div className="text-xs text-slate-400 mb-1">
+          Играющий
+          {fourHanded && (
+            <span className="ml-2 text-slate-500">
+              сдаёт {game.players[dealer]} — в розыгрыше не участвует
+            </span>
+          )}
+        </div>
+        <div className={`grid gap-2 ${canPlay.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {canPlay.map((p) => (
             <button
               key={p}
               onClick={() => {
@@ -328,6 +365,55 @@ function GameFormFields(props: {
         </div>
       )}
 
+      {/* Сдающий вступает вистующим — торговля «пас — полвиста — пас» */}
+      {fourHanded && rules.dealerMayVist && (
+        <button
+          onClick={() => setDealerVists(!dealerVists)}
+          className={`w-full py-2 rounded-lg text-sm font-semibold ${
+            dealerVists
+              ? 'bg-yellow-500 text-slate-900'
+              : 'bg-slate-900 border border-slate-700 text-slate-300'
+          }`}
+        >
+          {dealerVists ? '✓ ' : ''}
+          Вистует и сдающий ({game.players[dealer]})
+        </button>
+      )}
+
+      {/* Премия сдатчику за быстрые взятки в прикупе */}
+      {rules.prikupBonus && (
+        <div>
+          <div className="text-xs text-slate-400 mb-1">
+            Быстрые взятки в прикупе
+            <span className="ml-2 text-slate-500">
+              Т или КД одной масти — 1, ТК одной масти — 2, два туза — 3
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {[0, 1, 2, 3].map((n) => (
+              <button
+                key={n}
+                onClick={() => setPrikupFast(n)}
+                className={`py-2 rounded-lg font-semibold ${
+                  prikupFast === n
+                    ? 'bg-yellow-500 text-slate-900'
+                    : 'bg-slate-900 border border-slate-700'
+                }`}
+              >
+                {n === 0 ? 'нет' : n}
+              </button>
+            ))}
+          </div>
+          {prikupFast > 0 && (
+            <div className="text-xs text-slate-500 mt-1">
+              {fourHanded
+                ? `${game.players[dealer]} пишет ${prikupFast * rules.vistPerTrick[gameLevel]} вистов на играющего`
+                : `каждый соперник пишет ${(prikupFast * rules.vistPerTrick[gameLevel]) / 2} вистов на играющего`}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Вистовали */}
       <div>
         <div className="text-xs text-slate-400 mb-1">Как вистовали</div>
@@ -338,7 +424,7 @@ function GameFormFields(props: {
               <div key={v} className="grid grid-cols-4 gap-2 items-center">
                 <div className="font-semibold text-sm">{game.players[v]}</div>
                 {(['vist', 'pass', 'half'] as VistDecision[]).map((d) => {
-                  const disabled = d === 'half' && gameLevel > 7
+                  const disabled = d === 'half' && !rules.halfVistLevels.includes(gameLevel)
                   return (
                     <button
                       key={d}
@@ -366,10 +452,16 @@ function GameFormFields(props: {
       {isAuto && (
         <div className="px-3 py-2 bg-slate-900 rounded-lg text-sm text-slate-300">
           {allPassAuto && (
-            <>Оба вистующих пасовали — игра автоматом. Играющему пуля +{gameLevel === 6 ? 2 : gameLevel === 7 ? 4 : gameLevel === 8 ? 6 : gameLevel === 9 ? 8 : 10}.</>
+            <>
+              Все вистующие пасовали — игра автоматом. Играющему пуля +
+              {rules.poolCost[gameLevel]}.
+            </>
           )}
           {halfAndPassAuto && (
-            <>Полвиста — игра без розыгрыша. Играющему пуля, полвистовому висты за {gameLevel === 6 ? 2 : 1} взятки.</>
+            <>
+              Полвиста — игра без розыгрыша. Играющему пуля, полвистовому висты за{' '}
+              {halfVistTricks(rules, gameLevel)} взятки.
+            </>
           )}
         </div>
       )}
@@ -426,13 +518,17 @@ function MisereFormFields(props: {
 }) {
   const game = useGameStore((s) => s.game)!
   const { misPlayer, setMisPlayer, misTricks, setMisTricks } = props
+  const seats = seatsOf(game)
+  const rules = rulesOf(game)
+  const dealer = prevClockwise(game.firstHand, seats)
+  const canPlay = seats.filter((p) => seats.length < 4 || p !== dealer)
 
   return (
     <div className="space-y-3">
       <div>
         <div className="text-xs text-slate-400 mb-1">Играющий</div>
-        <div className="grid grid-cols-3 gap-2">
-          {PLAYERS.map((p) => (
+        <div className={`grid gap-2 ${canPlay.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {canPlay.map((p) => (
             <button
               key={p}
               onClick={() => setMisPlayer(p)}
@@ -449,7 +545,9 @@ function MisereFormFields(props: {
       <div>
         <div className="text-xs text-slate-400 mb-1">
           Взял (поймали) —{' '}
-          {misTricks === 0 ? 'сыграл (10 в пулю)' : `поймали (${misTricks * 20} в гору)`}
+          {misTricks === 0
+            ? `сыграл (${rules.miserePoolCost} в пулю)`
+            : `поймали (${misTricks * rules.misereTrickPenalty} в гору)`}
         </div>
         <div className="grid grid-cols-11 gap-1">
           {Array.from({ length: 11 }, (_, i) => (
@@ -476,23 +574,33 @@ function RaspasFormFields(props: {
 }) {
   const game = useGameStore((s) => s.game)!
   const { level, tricks, setTricks } = props
-  const total = tricks.A + tricks.B + tricks.C
+  const seats = seatsOf(game)
+  const rules = rulesOf(game)
+  const dealer = prevClockwise(game.firstHand, seats)
+  const players = raspasPlayers(seats, dealer, rules.dealerPlaysRaspasPrikup)
+  const total = players.reduce((sum, p) => sum + tricks[p], 0)
   const tricksOk = total === 10
-  const cost = RASPAS_TRICK_COST[level]
+  const cost = rules.raspasCostLadder[Math.min(level - 1, rules.raspasCostLadder.length - 1)]
   const levelLabel = level === 1 ? 'обычный' : level === 2 ? '2-й' : '8-мерный'
 
   return (
     <div className="space-y-3">
       <div className="px-3 py-2 bg-slate-900 rounded-lg text-sm">
-        Распас {levelLabel} · цена {cost} за взятку · амнистия минимума
+        Распас {levelLabel} · цена {cost} за взятку ·{' '}
+        {rules.raspasWriteEveryTrick ? 'в гору за каждую взятку' : 'амнистия минимума'}
+        {players.length === 4 && (
+          <div className="text-xs text-slate-400 mt-1">
+            Сдаёт {game.players[dealer]} — ходит картами прикупа и пишет взятки наравне со всеми
+          </div>
+        )}
       </div>
 
       <div>
         <div className={`text-xs mb-1 ${tricksOk ? 'text-slate-400' : 'text-red-400'}`}>
           Взятки каждого — сумма {total}/10
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {PLAYERS.map((p) => (
+        <div className={`grid gap-2 ${players.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {players.map((p) => (
             <div key={p} className="bg-slate-900 rounded-lg p-2">
               <div className="text-xs mb-1 truncate">{game.players[p]}</div>
               <div className="flex items-center gap-1">
@@ -530,13 +638,16 @@ function GiveupFormFields(props: {
     minBid, giveupPlayer, setGiveupPlayer, giveupLevel, setGiveupLevel,
   } = props
   const availableLevels = GAME_LEVELS.filter((l) => l >= minBid)
+  const seats = seatsOf(game)
+  const dealer = prevClockwise(game.firstHand, seats)
+  const canPlay = seats.filter((p) => seats.length < 4 || p !== dealer)
 
   return (
     <div className="space-y-3">
       <div>
         <div className="text-xs text-slate-400 mb-1">Играющий</div>
-        <div className="grid grid-cols-3 gap-2">
-          {PLAYERS.map((p) => (
+        <div className={`grid gap-2 ${canPlay.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {canPlay.map((p) => (
             <button
               key={p}
               onClick={() => setGiveupPlayer(p)}
@@ -571,8 +682,31 @@ function GiveupFormFields(props: {
   )
 }
 
-// Хелпер: предыдущий по часовой (сдающий = предыдущий от первой руки)
-function prevClockwise(p: PlayerId): PlayerId {
-  const idx = PLAYERS.indexOf(p)
-  return PLAYERS[(idx + PLAYERS.length - 1) % PLAYERS.length]
+// Кто вистует в этой сдаче. Втроём — все, кроме играющего. Вчетвером сдающий вне
+// розыгрыша, но может вступить сам (торговля «пас — полвиста — пас»).
+function vistersFor(
+  seats: PlayerId[],
+  dealer: PlayerId,
+  player: PlayerId,
+  dealerVists: boolean,
+): PlayerId[] {
+  return seats.filter((p) => {
+    if (p === player) return false
+    if (seats.length < 4) return true
+    return p !== dealer || dealerVists
+  })
+}
+
+// Кто пишет взятки на распасе. Вчетвером сдающий участвует: он открывает прикуп
+// по карте и делает первые два хода.
+function raspasPlayers(seats: PlayerId[], dealer: PlayerId, dealerPlays: boolean): PlayerId[] {
+  if (seats.length < 4 || dealerPlays) return seats
+  return seats.filter((p) => p !== dealer)
+}
+
+// Собрать запись только по участникам сдачи, без пустых мест
+function pickBy<T>(keys: PlayerId[], value: (p: PlayerId) => T): Partial<Record<PlayerId, T>> {
+  const out: Partial<Record<PlayerId, T>> = {}
+  keys.forEach((k) => (out[k] = value(k)))
+  return out
 }
