@@ -17,13 +17,17 @@ import {
   isEightRaspasFullCircle,
 } from './raspas'
 import { ALL_PLAYERS, seatsOf, zeroScores, zeroWhists } from './types'
+import { rulesOf } from './conventions'
 // Правило Андрея: 1 очко переданной пули = 10 вистов
 const POOL_TRANSFER_VISTS_PER_POINT = 10
 
 // Полная дельта: базовый calcDeal + учёт перекрытия пули (для отображения и применения)
 export function calcDealFull(state: GameState, deal: Deal): DealDelta {
   const seats = seatsOf(state)
-  const delta = calcDeal(deal, seats)
+  const rules = rulesOf(state)
+  const delta = calcDeal(deal, seats, rules)
+  // Без предела пули перекрывать нечего: играют на время, считают по последней сдаче
+  if (!rules.poolOverflowTransfers) return delta
   // Симулируем pool после базовой delta
   const pool: Record<PlayerId, number> = { ...zeroScores(), ...state.pool }
   seats.forEach((p) => (pool[p] += delta.pool[p]))
