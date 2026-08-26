@@ -69,6 +69,36 @@ describe('ФСПР: вист джентльменский', () => {
       sumWhists(calcDeal(deal, PLAYERS, HOME_RULES)),
     )
   })
+
+  it('главное отличие: пасовавший тоже получает свою половину', () => {
+    // B вистовал и взял все 3 взятки пары, C пасовал
+    const oneVists: Deal = {
+      ...deal,
+      vistersTricks: { B: 3, C: 0 },
+      vistDecisions: { B: 'vist', C: 'pass' },
+    }
+    const g = calcDeal(oneVists, PLAYERS, FSPR_RULES)
+    expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(12) // 1.5 × 8
+    expect(g.whists.find((w) => w.from === 'C')?.amount).toBe(12) // столько же, хоть и пасовал
+
+    // Дома пасовавший не получает ничего: все 3 взятки пишет вистовавший
+    const h = calcDeal(oneVists, PLAYERS, HOME_RULES)
+    expect(h.whists.find((w) => w.from === 'B')?.amount).toBe(24) // 3 × 8
+    expect(h.whists.find((w) => w.from === 'C')).toBeUndefined()
+  })
+
+  it('но штраф за недобор платит только вистовавший — пасовавший не виноват', () => {
+    // Норма пары на семерной 2, пара взяла 0
+    const oneVists: Deal = {
+      ...deal,
+      playerTricks: 10,
+      vistersTricks: { B: 0, C: 0 },
+      vistDecisions: { B: 'vist', C: 'pass' },
+    }
+    const g = calcDeal(oneVists, PLAYERS, FSPR_RULES)
+    expect(g.mount.B).toBe(8) // 2 недобранные × 4
+    expect(g.mount.C).toBe(0) // пасовавший в гору не пишет
+  })
 })
 
 describe('ФСПР: распасы пишутся за каждую взятку', () => {

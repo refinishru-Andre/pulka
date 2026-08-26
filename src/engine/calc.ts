@@ -95,57 +95,70 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
   // НЕ отвечает — в гору не платит.
   const paysForMiss = (v: PlayerId) => !(seats.length === 4 && v === deal.dealer)
 
-  if (activeVisters.length === 1) {
-    // Один вистует за всю пару: ему все взятки пары и весь штраф
+  // ---- ВИСТЫ ЗА ВЗЯТКИ: кому они достаются ----
+  //
+  // Это и есть разница «джентльменский / жлобский», и она НЕ про размер штрафа.
+  //
+  // Джентльменский: висты защиты делятся поровну между ОБОИМИ защитниками, в том
+  // числе пасовавшим. Вистовал один, взятки взял он — половина всё равно уходит
+  // напарнику.
+  // Жлобский: пишет только тот, кто вистовал. Пасовавший не получает ничего,
+  // даже за взятки, которые физически взял сам.
+  if (rules.vistStyle === 'gentleman') {
+    const share = vTricksTotal / vs.length
+    if (share > 0) {
+      vs.forEach((v) => delta.whists.push({ from: v, to: player, amount: share * perTrick }))
+    }
+  } else if (activeVisters.length === 1) {
+    // Один вистует за всю пару — ему все взятки пары
     const solo = activeVisters[0]
     if (vTricksTotal > 0) {
       delta.whists.push({ from: solo, to: player, amount: vTricksTotal * perTrick })
     }
-    if (vTricksTotal < duty && paysForMiss(solo)) {
-      delta.mount[solo] += (duty - vTricksTotal) * perMiss
-    }
-  } else if (activeVisters.length >= 2) {
-    if (rules.vistStyle === 'gentleman') {
-      // Джентльменский: взятки пары складываются и делятся поровну,
-      // независимо от того, кто их физически взял.
-      const share = vTricksTotal / activeVisters.length
-      activeVisters.forEach((v) => {
-        if (share > 0) delta.whists.push({ from: v, to: player, amount: share * perTrick })
-      })
-      if (vTricksTotal < duty) {
-        const shortPerPlayer = (duty - vTricksTotal) / activeVisters.length
-        activeVisters.forEach((v) => {
-          if (paysForMiss(v)) delta.mount[v] += shortPerPlayer * perMiss
-        })
+  } else {
+    activeVisters.forEach((v) => {
+      const myTricks = deal.vistersTricks[v] ?? 0
+      if (myTricks > 0) {
+        delta.whists.push({ from: v, to: player, amount: myTricks * perTrick })
       }
-    } else {
-      // Жлобский: каждый пишет ровно свои личные взятки
+    })
+  }
+
+  // ---- ШТРАФ ЗА НЕДОБОР: кто и сколько платит в гору ----
+  //
+  // Это «ответственность». Полуответственный вист = половина цены игры за
+  // каждую недобранную взятку (у нас это и есть perMiss). Платят только те, кто
+  // вистовал: пасовавший в недоборе не виноват.
+  if (vTricksTotal < duty && activeVisters.length > 0) {
+    if (rules.vistStyle === 'gentleman') {
+      // Раз висты общие — и недобор общий: делится между вистовавшими
+      const shortPerPlayer = (duty - vTricksTotal) / activeVisters.length
       activeVisters.forEach((v) => {
-        const myTricks = deal.vistersTricks[v] ?? 0
-        if (myTricks > 0) {
-          delta.whists.push({ from: v, to: player, amount: myTricks * perTrick })
-        }
+        if (paysForMiss(v)) delta.mount[v] += shortPerPlayer * perMiss
       })
-      // Штраф за недобор — «пол взятки не считается».
-      // Норма пары ≥ 2 (6-я, 7-я): делится нацело, каждый должен взять duty/2.
-      // Норма пары = 1 (8-я, 9-я): пара должна взять 1. Если не взяла — штраф
-      // каждому, кто лично взял 0, на 1 недобранную взятку целиком.
-      if (vTricksTotal < duty) {
-        if (duty >= 2) {
-          const dutyPerPlayer = duty / 2
-          activeVisters.forEach((v) => {
-            const myTricks = deal.vistersTricks[v] ?? 0
-            if (myTricks < dutyPerPlayer && paysForMiss(v)) {
-              delta.mount[v] += (dutyPerPlayer - myTricks) * perMiss
-            }
-          })
-        } else {
-          activeVisters.forEach((v) => {
-            if ((deal.vistersTricks[v] ?? 0) === 0 && paysForMiss(v)) {
-              delta.mount[v] += perMiss
-            }
-          })
-        }
+    } else if (activeVisters.length === 1) {
+      // Один вистовал за пару — на нём весь недобор пары
+      const solo = activeVisters[0]
+      if (paysForMiss(solo)) delta.mount[solo] += (duty - vTricksTotal) * perMiss
+    } else {
+      // Жлобский, вистуют оба — «пол взятки не считается».
+      // Норма пары ≥ 2 (6-я, 7-я): у каждого своя норма duty/2, штраф тому, кто
+      // недобрал СВОЮ. Норма пары = 1 (8-я, 9-я): штраф каждому, кто лично взял
+      // ноль, и на целую взятку.
+      if (duty >= 2) {
+        const dutyPerPlayer = duty / 2
+        activeVisters.forEach((v) => {
+          const myTricks = deal.vistersTricks[v] ?? 0
+          if (myTricks < dutyPerPlayer && paysForMiss(v)) {
+            delta.mount[v] += (dutyPerPlayer - myTricks) * perMiss
+          }
+        })
+      } else {
+        activeVisters.forEach((v) => {
+          if ((deal.vistersTricks[v] ?? 0) === 0 && paysForMiss(v)) {
+            delta.mount[v] += perMiss
+          }
+        })
       }
     }
   }
