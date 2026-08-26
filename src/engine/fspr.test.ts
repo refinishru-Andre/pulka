@@ -51,40 +51,34 @@ describe('ФСПР: вист джентльменский', () => {
     vistDecisions: { B: 'vist', C: 'vist' },
   }
 
-  it('взятки пары делятся поровну, кто бы их ни взял', () => {
+  it('когда вистуют ОБА — каждый за свои, стиль виста ни при чём', () => {
+    // Делить нечего: оба в игре, каждый пишет свои взятки. Турнир и дом совпадают.
     const g = calcDeal(deal, PLAYERS, FSPR_RULES)
-    // Пара взяла 3, делим пополам: по 1.5 взятки × 8 = 12 каждому
-    expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(12)
-    expect(g.whists.find((w) => w.from === 'C')?.amount).toBe(12)
-  })
-
-  it('дома те же взятки пишутся каждым за себя', () => {
     const h = calcDeal(deal, PLAYERS, HOME_RULES)
-    expect(h.whists.find((w) => w.from === 'B')?.amount).toBe(8)
-    expect(h.whists.find((w) => w.from === 'C')?.amount).toBe(16)
+    expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(8) // 1 взятка × 8
+    expect(g.whists.find((w) => w.from === 'C')?.amount).toBe(16) // 2 взятки × 8
+    expect(g.whists).toEqual(h.whists)
   })
 
-  it('сумма вистов одна и та же — меняется только дележ', () => {
-    expect(sumWhists(calcDeal(deal, PLAYERS, FSPR_RULES))).toBe(
-      sumWhists(calcDeal(deal, PLAYERS, HOME_RULES)),
-    )
-  })
-
-  it('главное отличие: пасовавший тоже получает свою половину', () => {
+  it('вся разница — когда один вистовал, а другой пасовал', () => {
     // B вистовал и взял все 3 взятки пары, C пасовал
     const oneVists: Deal = {
       ...deal,
       vistersTricks: { B: 3, C: 0 },
       vistDecisions: { B: 'vist', C: 'pass' },
     }
+    // Турнир: делим поровну между обоими защитниками, пасовавший при своих
     const g = calcDeal(oneVists, PLAYERS, FSPR_RULES)
     expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(12) // 1.5 × 8
     expect(g.whists.find((w) => w.from === 'C')?.amount).toBe(12) // столько же, хоть и пасовал
 
-    // Дома пасовавший не получает ничего: все 3 взятки пишет вистовавший
+    // Дома пасовавшему ноль: все 3 взятки забирает вистовавший
     const h = calcDeal(oneVists, PLAYERS, HOME_RULES)
     expect(h.whists.find((w) => w.from === 'B')?.amount).toBe(24) // 3 × 8
     expect(h.whists.find((w) => w.from === 'C')).toBeUndefined()
+
+    // Сумма при этом одна и та же — меняется только дележ
+    expect(sumWhists(g)).toBe(sumWhists(h))
   })
 
   it('на восьмерной оба вистующих платят по ПОЛНОЙ половине цены игры', () => {
