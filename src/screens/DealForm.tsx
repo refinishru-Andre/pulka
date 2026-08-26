@@ -4,7 +4,8 @@ import type { Deal, PlayerId, GameLevel, VistDecision, Contract, RaspasState } f
 import { seatsOf } from '../engine/types'
 import { raspasLevelFor, raspasCostFor, prevClockwise, rulesOf, halfVistTricks } from '../engine'
 
-type DealType = 'game' | 'misere' | 'raspas' | 'giveup'
+type DealType = 'game' | 'misere' | 'raspas' | 'giveup' | 'adjust'
+type AdjustTarget = 'mount' | 'pool' | 'whists'
 
 interface Props {
   minBid: number
@@ -52,6 +53,14 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
   const [raspasTricks, setRaspasTricks] = useState<Record<PlayerId, number>>({
     A: 0, B: 0, C: 0, D: 0,
   })
+
+  // Ручная корректировка: штраф судьи, поправка ошибки, любая договорённость,
+  // которую движок не знает. Величина ничем не ограничена.
+  const [adjPlayer, setAdjPlayer] = useState<PlayerId>(game.firstHand)
+  const [adjTarget, setAdjTarget] = useState<AdjustTarget>('mount')
+  const [adjTo, setAdjTo] = useState<PlayerId>(prevClockwise(game.firstHand, seats))
+  const [adjAmount, setAdjAmount] = useState('')
+  const [adjNote, setAdjNote] = useState('')
 
   const [giveupPlayer, setGiveupPlayer] = useState<PlayerId>(game.firstHand)
   const [giveupLevel, setGiveupLevel] = useState<GameLevel>(initialLevel)
@@ -116,6 +125,27 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         }),
       }
     }
+    if (dealType === 'adjust') {
+      const amount = Number(adjAmount.replace(',', '.'))
+      const valid =
+        Number.isFinite(amount) &&
+        amount !== 0 &&
+        adjNote.trim().length > 0 &&
+        (adjTarget !== 'whists' || adjTo !== adjPlayer)
+      return {
+        canSubmit: valid,
+        buildDeal: (): Deal => ({
+          type: 'adjust',
+          dealer,
+          firstHand: game.firstHand,
+          player: adjPlayer,
+          target: adjTarget,
+          ...(adjTarget === 'whists' ? { to: adjTo } : {}),
+          amount,
+          note: adjNote.trim(),
+        }),
+      }
+    }
     // giveup
     return {
       canSubmit: true,
@@ -131,6 +161,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
     dealType, game.firstHand, seats, dealer, rules, dealerVists, prikupFast,
     gamePlayer, gameLevel, gamePlayerTricks,
     gameVisterTricks, gameVistDecisions, misPlayer, misTricks,
+    adjPlayer, adjTarget, adjTo, adjAmount, adjNote,
     raspasTricks, raspasState, giveupPlayer, giveupLevel,
   ])
 
@@ -160,10 +191,10 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
           </div>
 
           {/* Выбор типа */}
-          <div className={`grid gap-2 ${rules.allowGiveup ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          <div className={`grid gap-2 ${rules.allowGiveup ? 'grid-cols-5' : 'grid-cols-4'}`}>
             {(rules.allowGiveup
-              ? (['game', 'misere', 'raspas', 'giveup'] as DealType[])
-              : (['game', 'misere', 'raspas'] as DealType[])
+              ? (['game', 'misere', 'raspas', 'giveup', 'adjust'] as DealType[])
+              : (['game', 'misere', 'raspas', 'adjust'] as DealType[])
             ).map((t) => (
               <button
                 key={t}
@@ -178,6 +209,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
                 {t === 'misere' && 'Мизер'}
                 {t === 'raspas' && `Распас ${raspasCostFor(raspasState, rules)}/вз`}
                 {t === 'giveup' && 'Без 3'}
+                {t === 'adjust' && '✏️ Правка'}
               </button>
             ))}
           </div>
@@ -226,6 +258,20 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
               setGiveupPlayer={setGiveupPlayer}
               giveupLevel={giveupLevel}
               setGiveupLevel={setGiveupLevel}
+            />
+          )}
+          {dealType === 'adjust' && (
+            <AdjustFormFields
+              adjPlayer={adjPlayer}
+              setAdjPlayer={setAdjPlayer}
+              adjTarget={adjTarget}
+              setAdjTarget={setAdjTarget}
+              adjTo={adjTo}
+              setAdjTo={setAdjTo}
+              adjAmount={adjAmount}
+              setAdjAmount={setAdjAmount}
+              adjNote={adjNote}
+              setAdjNote={setAdjNote}
             />
           )}
         </div>
@@ -709,4 +755,151 @@ function pickBy<T>(keys: PlayerId[], value: (p: PlayerId) => T): Partial<Record<
   const out: Partial<Record<PlayerId, T>> = {}
   keys.forEach((k) => (out[k] = value(k)))
   return out
+}
+
+// ============================================================================
+// РУЧНАЯ КОРРЕКТИРОВКА
+//
+// Отдельная строка в истории: кому, куда, сколько и почему. Нужна там, где
+// движок не знает правила — штраф судьи за нарушение, поправка ошибки записи,
+// договорённость за столом. Величина ничем не ограничена и может быть
+// отрицательной. Причину требуем обязательно: без неё через месяц никто не
+// вспомнит, откуда взялась цифра.
+// ============================================================================
+
+function AdjustFormFields(props: {
+  adjPlayer: PlayerId
+  setAdjPlayer: (p: PlayerId) => void
+  adjTarget: AdjustTarget
+  setAdjTarget: (t: AdjustTarget) => void
+  adjTo: PlayerId
+  setAdjTo: (p: PlayerId) => void
+  adjAmount: string
+  setAdjAmount: (v: string) => void
+  adjNote: string
+  setAdjNote: (v: string) => void
+}) {
+  const game = useGameStore((s) => s.game)!
+  const seats = seatsOf(game)
+  const {
+    adjPlayer, setAdjPlayer, adjTarget, setAdjTarget, adjTo, setAdjTo,
+    adjAmount, setAdjAmount, adjNote, setAdjNote,
+  } = props
+
+  const amount = Number(adjAmount.replace(',', '.'))
+  const amountOk = Number.isFinite(amount) && amount !== 0
+  const cols = seats.length === 4 ? 'grid-cols-4' : 'grid-cols-3'
+
+  const targetLabel: Record<AdjustTarget, string> = {
+    mount: 'Гора',
+    pool: 'Пуля',
+    whists: 'Висты',
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="px-3 py-2 bg-slate-900 rounded-lg text-sm text-slate-300">
+        Запись «руками» — движок её не считает, а пишет как сказано. Для штрафов
+        судьи, поправок и договорённостей.
+      </div>
+
+      <div>
+        <div className="text-xs text-slate-400 mb-1">Кому</div>
+        <div className={`grid gap-2 ${cols}`}>
+          {seats.map((p) => (
+            <button
+              key={p}
+              onClick={() => setAdjPlayer(p)}
+              className={`py-2 rounded-lg font-semibold truncate ${
+                adjPlayer === p ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
+              }`}
+            >
+              {game.players[p]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-xs text-slate-400 mb-1">Куда</div>
+        <div className="grid grid-cols-3 gap-2">
+          {(['mount', 'pool', 'whists'] as AdjustTarget[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setAdjTarget(t)}
+              className={`py-2 rounded-lg font-semibold ${
+                adjTarget === t ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
+              }`}
+            >
+              {targetLabel[t]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {adjTarget === 'whists' && (
+        <div>
+          <div className="text-xs text-slate-400 mb-1">На кого записать</div>
+          <div className={`grid gap-2 ${cols}`}>
+            {seats.map((p) => (
+              <button
+                key={p}
+                onClick={() => setAdjTo(p)}
+                disabled={p === adjPlayer}
+                className={`py-2 rounded-lg font-semibold truncate ${
+                  adjTo === p
+                    ? 'bg-yellow-500 text-slate-900'
+                    : 'bg-slate-900 border border-slate-700 disabled:opacity-30'
+                }`}
+              >
+                {game.players[p]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="text-xs text-slate-400 mb-1">
+          Сколько <span className="text-slate-500">— минус списывает</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            value={adjAmount}
+            onChange={(e) => setAdjAmount(e.target.value)}
+            placeholder="например 10 или −6"
+            className="flex-1 px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-xl font-bold focus:outline-none focus:border-yellow-500"
+          />
+          <button
+            onClick={() => setAdjAmount(amountOk ? String(-amount) : '-')}
+            className="px-4 py-3 rounded-lg bg-slate-700 hover:bg-slate-600 font-bold text-lg"
+            title="Сменить знак"
+          >
+            ±
+          </button>
+        </div>
+        {amountOk && (
+          <div className="text-xs text-slate-400 mt-1">
+            {game.players[adjPlayer]}: {targetLabel[adjTarget].toLowerCase()}{' '}
+            {amount > 0 ? '+' : ''}
+            {amount}
+            {adjTarget === 'whists' && adjTo !== adjPlayer && ` на ${game.players[adjTo]}`}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="text-xs text-slate-400 mb-1">Причина — обязательно</div>
+        <input
+          type="text"
+          value={adjNote}
+          onChange={(e) => setAdjNote(e.target.value)}
+          placeholder="ход вне очереди / ошибка записи / договорились"
+          className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-yellow-500"
+        />
+      </div>
+    </div>
+  )
 }

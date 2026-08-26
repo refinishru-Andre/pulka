@@ -150,6 +150,18 @@ export function Table({ onBack }: Props = {}) {
       lines.push(
         `${game.players[lastDeal.player]} ушёл без 3 на ${contractLabel(lastDeal.contract)}.`,
       )
+    } else if (lastDeal.type === 'adjust') {
+      const where =
+        lastDeal.target === 'mount'
+          ? 'гора'
+          : lastDeal.target === 'pool'
+            ? 'пуля'
+            : `висты на ${game.players[lastDeal.to!]}`
+      const sign = lastDeal.amount > 0 ? '+' : ''
+      lines.push(
+        `Правка руками: ${game.players[lastDeal.player]}, ${where} ${sign}${lastDeal.amount}.`,
+      )
+      lines.push(`Причина: ${lastDeal.note}`)
     }
     // Расчёт
     lines.push('') // разделитель
