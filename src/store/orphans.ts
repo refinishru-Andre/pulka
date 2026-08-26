@@ -49,9 +49,17 @@ export function dropOrphan(id: string) {
   write(listOrphans().filter((o) => o.id !== id))
 }
 
-// Убрать из запаса всё, что уже есть в облаке
-export function dropSynced(cloudIds: Set<string>) {
+// Партия НЕ сохранена надёжно, если в облаке её нет вообще либо там лежит
+// меньше сдач, чем на устройстве. Второй случай — обрыв связи посреди партии:
+// id совпадает, но облачная копия обрезана. Сверка только по id это пропускала.
+export function isMissingFromCloud(localDeals: number, cloudDeals: number | undefined): boolean {
+  if (cloudDeals === undefined) return true
+  return localDeals > cloudDeals
+}
+
+// Убрать из запаса то, что уже НАДЁЖНО лежит в облаке
+export function dropSynced(cloudDeals: Map<string, number>) {
   const list = listOrphans()
-  const kept = list.filter((o) => !cloudIds.has(o.id))
+  const kept = list.filter((o) => isMissingFromCloud(o.game.deals.length, cloudDeals.get(o.id)))
   if (kept.length !== list.length) write(kept)
 }

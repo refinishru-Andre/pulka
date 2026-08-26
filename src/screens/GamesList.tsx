@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { fetchGamesResult, deleteGame, uploadGame } from '../supabase/sync'
 import { supabase } from '../supabase/client'
 import { useGameStore } from '../store/game'
-import { listOrphans, dropOrphan, dropSynced, type Orphan } from '../store/orphans'
+import {
+  listOrphans,
+  dropOrphan,
+  dropSynced,
+  isMissingFromCloud,
+  type Orphan,
+} from '../store/orphans'
 import { importFromGames } from '../supabase/people'
 import { getCodeHint, clearCodeHint } from '../supabase/auth'
 import { settle } from '../engine'
@@ -27,20 +33,25 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
   const [syncOk, setSyncOk] = useState(false)
   const [orphans, setOrphans] = useState<Orphan[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  // id партии → сколько сдач лежит в облаке (для подписи «здесь 10, в облаке 5»)
+  const [cloudDeals, setCloudDeals] = useState<Map<string, number>>(new Map())
   const loadGame = useGameStore((s) => s.loadGame)
   const codeHint = getCodeHint()
 
-  // Партии, которые есть только на этом устройстве и не попали в облако:
-  // играли без входа или в момент игры не было связи.
-  const collectOrphans = (cloudIds: Set<string>): Orphan[] => {
-    dropSynced(cloudIds)
-    const found = listOrphans().filter((o) => !cloudIds.has(o.id))
+  // Партии, которых в облаке нет ВООБЩЕ или которые лежат там в урезанном виде:
+  // играли без входа, либо связь оборвалась посреди партии и часть сдач не уехала.
+  // Сверяем по числу сдач — id совпадает и у неполной облачной копии.
+  const collectOrphans = (cloudDeals: Map<string, number>): Orphan[] => {
+    dropSynced(cloudDeals)
+    const missing = (id: string, deals: number) => isMissingFromCloud(deals, cloudDeals.get(id))
+    const found = listOrphans().filter((o) => missing(o.id, o.game.deals.length))
     const { game, gameId } = useGameStore.getState()
     if (
       gameId &&
       game &&
       game.deals.length > 0 &&
-      !cloudIds.has(gameId) &&
+      missing(gameId, game.deals.length) &&
       !found.some((o) => o.id === gameId)
     ) {
       found.push({ id: gameId, game, savedAt: game.createdAt })
@@ -53,18 +64,33 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
     const res = await fetchGamesResult()
     setGames(res.items)
     // Считаем «потеряшки» только когда облако реально ответило
-    if (res.ok) setOrphans(collectOrphans(new Set(res.items.map((g) => g.id))))
+    if (res.ok) {
+      const cloudDeals = new Map(res.items.map((g) => [g.id, g.game.deals.length]))
+      setCloudDeals(cloudDeals)
+      setOrphans(collectOrphans(cloudDeals))
+    }
     setLoading(false)
   }
 
-  // Загрузить локальную партию в облако + завести её игроков в справочник
+  // Загрузить локальную партию в облако + завести её игроков в справочник.
+  // Из запаса убираем ТОЛЬКО после подтверждённой записи — иначе неудачная
+  // загрузка стирала единственную копию партии.
   const handleUploadOrphan = async (o: Orphan) => {
     setBusyId(o.id)
+    setUploadError(null)
     try {
       await importFromGames([{ players: o.game.players }])
-      await uploadGame(o.id, o.game)
-      dropOrphan(o.id)
-      await refresh()
+      const result = await uploadGame(o.id, o.game)
+      if (result === 'ok') {
+        dropOrphan(o.id)
+        await refresh()
+      } else {
+        setUploadError(
+          result === 'guest'
+            ? 'Не получилось: вы не вошли в коллекцию. Партия осталась на устройстве.'
+            : 'Не получилось записать в облако — нет связи с сервером. Партия осталась на устройстве, попробуйте ещё раз позже.',
+        )
+      }
     } finally {
       setBusyId(null)
     }
@@ -73,6 +99,9 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
   const handleDropOrphan = (o: Orphan) => {
     if (!confirm('Удалить эту локальную партию без сохранения? Восстановить будет нельзя.')) return
     dropOrphan(o.id)
+    // Если это текущая открытая партия — её мало убрать из запаса, иначе она
+    // вернётся в список при следующем обновлении.
+    if (useGameStore.getState().gameId === o.id) useGameStore.getState().discardGame()
     setOrphans((prev) => prev.filter((x) => x.id !== o.id))
   }
 
@@ -160,9 +189,14 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
               Есть партии только на этом устройстве
             </div>
             <div className="text-sm text-yellow-100/70 mb-4">
-              Они записались, когда не было входа или связи. В облаке и в статистике их пока нет —
-              нажми «Загрузить в облако».
+              Они записались, когда не было входа или связи. В облаке их нет совсем или есть не
+              все сдачи — нажми «Загрузить в облако».
             </div>
+            {uploadError && (
+              <div className="mb-4 px-4 py-3 bg-red-500/15 border border-red-500/40 rounded-xl text-sm text-red-200">
+                {uploadError}
+              </div>
+            )}
             <div className="space-y-3">
               {orphans.map((o) => (
                 <div
@@ -175,6 +209,12 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
                       Пуля до {o.game.poolLimit} · сдач: {o.game.deals.length} ·{' '}
                       {new Date(o.game.createdAt).toLocaleString('ru')}
                     </div>
+                    {cloudDeals.has(o.id) && (
+                      <div className="text-sm text-yellow-300 mt-1">
+                        В облаке только {cloudDeals.get(o.id)} — не хватает{' '}
+                        {o.game.deals.length - (cloudDeals.get(o.id) ?? 0)}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
+import { useSyncStatus } from '../store/sync-status'
 import { settle, minBidFor, applyDeal } from '../engine'
 import { PLAYERS } from '../engine/types'
 import type { PlayerId, GameState } from '../engine/types'
@@ -37,6 +38,26 @@ const RASPAS_LABEL: Record<string, string> = {
   eightRaspas: '8-мерные распасы · мин 8',
 }
 
+// Значок в шапке: доехала ли последняя сдача до облака.
+// Показывает состояние ЗАПИСИ, а не факт входа — обрыв связи должен быть виден
+// сразу за столом, а не обнаруживаться на следующий день.
+function SyncBadge() {
+  const state = useSyncStatus((s) => s.state)
+  if (state === 'idle') return null
+  const view = {
+    saving: { text: '◌ сохраняю…', cls: 'text-slate-300' },
+    saved: { text: '● записано в облако', cls: 'text-green-400' },
+    guest: { text: '● только на этом устройстве', cls: 'text-yellow-400' },
+    failed: { text: '▲ НЕ УХОДИТ В ОБЛАКО', cls: 'text-red-400 font-bold' },
+  }[state]
+  return (
+    <>
+      <span>·</span>
+      <span className={view.cls}>{view.text}</span>
+    </>
+  )
+}
+
 interface Props {
   onBack?: () => void
 }
@@ -50,6 +71,7 @@ export function Table({ onBack }: Props = {}) {
   const deleteLastDeal = useGameStore((s) => s.deleteLastDeal)
   const resetGame = useGameStore((s) => s.resetGame)
   const finishGame = useGameStore((s) => s.finishGame)
+  const syncState = useSyncStatus((s) => s.state)
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState(false)
@@ -197,6 +219,7 @@ export function Table({ onBack }: Props = {}) {
                 </span>
               )
             })()}
+            <SyncBadge />
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -321,6 +344,20 @@ export function Table({ onBack }: Props = {}) {
           )}
         </div>
       </div>
+
+      {/* Связь с облаком потеряна. Данные не пропали — они в памяти этого
+          устройства, и приложение само повторяет отправку. Опасно только
+          закрыть вкладку и уйти играть на другом устройстве. */}
+      {syncState === 'failed' && (
+        <div className="mb-5 px-5 py-4 bg-red-500/15 border border-red-500/50 rounded-lg">
+          <div className="font-bold text-red-300 text-lg">▲ Сдачи не уходят в облако</div>
+          <div className="text-base text-red-100/80 mt-1">
+            Нет связи с сервером. Записывать можно дальше — всё сохраняется на этом устройстве,
+            и приложение само отправит партию, когда связь вернётся. Только не закрывай вкладку
+            надолго и не открывай эту партию на другом устройстве.
+          </div>
+        </div>
+      )}
 
       {/* Состояние распасов */}
       <div className="mb-5 px-5 py-3 bg-slate-800 rounded-lg text-center text-base">

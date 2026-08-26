@@ -62,13 +62,24 @@ function fromCloud(cloud: CloudGame): GameState {
 
 // ============ ОБЛАЧНЫЕ ОПЕРАЦИИ ============
 
-// Сохранить/обновить текущую игру в облаке
+// Чем закончилась попытка записи в облако.
+// 'guest'  — не вошли в коллекцию, партия живёт только на этом устройстве (это не ошибка);
+// 'failed' — вошли, но записать не удалось (нет связи, сервер недоступен, RLS).
+export type UploadResult = 'ok' | 'guest' | 'failed'
+
+// Сохранить/обновить текущую игру в облаке.
+// ВАЖНО: возвращает результат, а не void — вызывающий код обязан отличать
+// «точно записано» от «не записано». Раньше ошибка молча уходила в консоль,
+// и потеряшка удалялась из запаса даже когда загрузка не прошла.
 export async function uploadGame(
   gameId: string,
   game: GameState,
-): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user
-  if (!user) return // не авторизован — не синхронизируем
+): Promise<UploadResult> {
+  // getSession() читает локальное хранилище и работает без связи —
+  // в отличие от getUser(), который ходит на сервер и без сети упал бы.
+  const session = (await supabase.auth.getSession()).data.session
+  const user = session?.user
+  if (!user) return 'guest' // не авторизован — не синхронизируем
 
   const allClosed = Object.values(game.pool).every((p) => p >= game.poolLimit)
   const finished = allClosed || game.finishedManually === true
@@ -84,8 +95,18 @@ export async function uploadGame(
     finished_at: finished ? new Date().toISOString() : null,
   }
 
-  const { error } = await supabase.from('games').upsert(payload, { onConflict: 'id' })
-  if (error) console.error('[sync] upload failed:', error)
+  try {
+    const { error } = await supabase.from('games').upsert(payload, { onConflict: 'id' })
+    if (error) {
+      console.error('[sync] upload failed:', error)
+      return 'failed'
+    }
+    return 'ok'
+  } catch (err) {
+    // Обрыв связи бросает исключение, а не возвращает error
+    console.error('[sync] upload threw:', err)
+    return 'failed'
+  }
 }
 
 export interface GamesFetch {
