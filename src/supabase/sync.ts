@@ -142,7 +142,9 @@ export async function fetchGamesResult(): Promise<GamesFetch> {
   const items = (data as CloudGame[]).map((c) => {
     const raw = fromCloud(c)
     // Пересчитываем state из deals — cloud state мог быть с багами старой логики
-    const game = raw.deals.length > 0 ? recomputeState(raw) : raw
+    // Вмороженные партии recomputeState пропускает — с ростом числа партий
+    // это единственное, что не даёт списку тормозить на переигрывании истории.
+    const game = recomputeState(raw)
     return { id: c.id, game, finished: c.finished }
   })
   return { ok: true, items }

@@ -2,7 +2,7 @@
 // Все метрики — must-have по результатам research
 
 import type { GameState, Deal } from './types'
-import { PLAYERS } from './types'
+import { seatsOf } from './types'
 import { settle } from './settle'
 
 // ============ ТИПЫ ============
@@ -75,7 +75,7 @@ function emptyOrderStats(): OrderStats {
 
 function isGameFinished(g: GameState): boolean {
   if (g.finishedManually) return true
-  return PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
+  return seatsOf(g).every((p) => g.pool[p] >= g.poolLimit)
 }
 
 function newPlayerStats(name: string): PlayerStats {
@@ -132,7 +132,8 @@ export function computeStats(games: GameState[]): OverallStats {
     totalDeals += game.deals.length
 
     // Инициализируем игроков этой партии
-    const gameNames = PLAYERS.map((p) => game.players[p])
+    const seats = seatsOf(game)
+    const gameNames = seats.map((p) => game.players[p])
     for (const name of gameNames) {
       if (!players[name]) players[name] = newPlayerStats(name)
       if (!streaks[name]) streaks[name] = { current: 0, type: null }
@@ -141,7 +142,7 @@ export function computeStats(games: GameState[]): OverallStats {
     const settlement = settle(game)
 
     // Обновляем общие метрики каждого игрока
-    for (const p of PLAYERS) {
+    for (const p of seats) {
       const name = game.players[p]
       const ps = players[name]
       const net = settlement.net[p]
@@ -182,12 +183,12 @@ export function computeStats(games: GameState[]): OverallStats {
     }
 
     // H2H — попарные разности (a.net − b.net усредняется через попарки Settle)
-    for (let i = 0; i < PLAYERS.length; i++) {
-      for (let j = i + 1; j < PLAYERS.length; j++) {
-        const nameA = game.players[PLAYERS[i]]
-        const nameB = game.players[PLAYERS[j]]
-        const netA = settlement.net[PLAYERS[i]]
-        const netB = settlement.net[PLAYERS[j]]
+    for (let i = 0; i < seats.length; i++) {
+      for (let j = i + 1; j < seats.length; j++) {
+        const nameA = game.players[seats[i]]
+        const nameB = game.players[seats[j]]
+        const netA = settlement.net[seats[i]]
+        const netB = settlement.net[seats[j]]
         // Долг A → B: если netA − netB > 0, A относительно B в плюсе
         const diff = (netA - netB) / 2
         const key = [nameA, nameB].sort().join('||')
@@ -248,11 +249,13 @@ function processDeal(deal: Deal, game: GameState, players: Record<string, Player
       orderStats.avgUnderbid += level - deal.playerTricks
     }
 
-    // Масть больше не пишем: на расчёт она не влияет. Считаем только Сталинград (6♠)
+    // Счётчик Сталинградов — историческая метрика: метка 6♠ есть только у сдач,
+    // записанных до отказа от неё. В новых партиях всегда 0.
     if (level === 6 && suit === 'S') ps.stalingrads++
 
-    // Учёт вистующих
-    for (const vp of PLAYERS) {
+    // Учёт вистующих. Вчетвером у сдающего решения нет — оно undefined,
+    // и ни один счётчик не сработает.
+    for (const vp of seatsOf(game)) {
       if (vp === deal.player) continue
       const vName = game.players[vp]
       const vs = players[vName]
@@ -270,7 +273,7 @@ function processDeal(deal: Deal, game: GameState, players: Record<string, Player
     if (deal.playerTricks === 0) ps.miseres.played++
     else ps.miseres.caught++
   } else if (deal.type === 'raspas') {
-    for (const p of PLAYERS) {
+    for (const p of seatsOf(game)) {
       const name = game.players[p]
       const ps = players[name]
       if (!ps) continue
