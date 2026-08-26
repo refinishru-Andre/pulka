@@ -24,6 +24,8 @@ interface CloudGame {
     // Места за столом. У партий, записанных до появления игры вчетвером,
     // поля нет — это стол на троих (см. seatsOf).
     seats?: Seats
+    // Итог вморожен — не пересчитывать (см. recomputeState)
+    frozenAt?: number
   }
   finished: boolean
   finished_at: string | null
@@ -43,6 +45,7 @@ function toCloudState(game: GameState) {
     deals: game.deals,
     finishedManually: game.finishedManually,
     seats: game.seats,
+    frozenAt: game.frozenAt,
     // lastDelta не сохраняем, он вычисляется
   }
 }
@@ -62,6 +65,7 @@ function fromCloud(cloud: CloudGame): GameState {
     deals: cloud.state.deals,
     finishedManually: cloud.state.finishedManually,
     seats: cloud.state.seats,
+    frozenAt: cloud.state.frozenAt,
   }
 }
 

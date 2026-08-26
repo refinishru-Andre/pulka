@@ -126,9 +126,20 @@ export function emptyStateFrom(state: GameState, firstHand?: PlayerId): GameStat
 
 // Пересчитать состояние партии из истории сдач — deals[] единственный источник
 // истины, pool/mount/whists это кеш. Вызывается при каждой загрузке партии.
+//
+// ИСКЛЮЧЕНИЕ: вмороженная партия (frozenAt) не пересчитывается никогда. Её итог
+// зафиксирован таким, каким был при завершении, и изменения формул движка на него
+// не влияют — даже если в нём была ошибка счёта (решение Андрея, 2026-08-26).
 export function recomputeState(game: GameState): GameState {
+  if (game.frozenAt) return game
   if (game.deals.length === 0) return game
   return game.deals.reduce(applyDeal, emptyStateFrom(game, game.deals[0].firstHand))
+}
+
+// Заморозить итог партии. Вызывается при завершении — дальше цифры не меняются.
+export function freezeGame(game: GameState, at: number): GameState {
+  if (game.frozenAt) return game // уже вморожена — второй раз не трогаем
+  return { ...game, frozenAt: at }
 }
 
 // Проверка: закрыта ли пуля у игрока

@@ -3,7 +3,13 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Deal, GameState, PlayerId, Seats } from '../engine/types'
-import { applyDeal, undoLastDeal, recomputeState } from '../engine'
+import {
+  applyDeal,
+  undoLastDeal,
+  recomputeState,
+  freezeGame,
+  isGameFinished as allPoolsClosed,
+} from '../engine'
 import { uploadGame, type UploadResult } from '../supabase/sync'
 import { PLAYERS, zeroScores, zeroWhists } from '../engine/types'
 import { stashOrphan } from './orphans'
@@ -76,7 +82,7 @@ function scheduleSync(gameId: string, game: GameState) {
 // «не уходит в облако». Единственная разрешённая запись — сам перевод в завершённые
 // (finishGame), он делается пока в облаке ещё finished = false.
 function isGameFinished(g: GameState): boolean {
-  return g.finishedManually === true || PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
+  return g.finishedManually === true || allPoolsClosed(g)
 }
 
 // Связь вернулась — не ждём очередного повтора
@@ -177,10 +183,12 @@ export const useGameStore = create<Store>()(
         const g = get().game
         if (!g) return
         // Блокируем добавление на завершённой партии или во время просмотра
-        const allClosed = PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
-        if (allClosed || g.finishedManually) return
+        if (isGameFinished(g)) return
         if (get().viewIndex !== null) return
-        const newGame = applyDeal(g, deal)
+        const applied = applyDeal(g, deal)
+        // Пули закрылись этой сдачей — партия окончена, вмораживаем итог,
+        // чтобы будущие изменения формул его уже не трогали.
+        const newGame = isGameFinished(applied) ? freezeGame(applied, Date.now()) : applied
         set({ game: newGame, redoStack: [], viewIndex: null })
         const id = get().gameId
         if (id) scheduleSync(id, newGame)
@@ -205,8 +213,7 @@ export const useGameStore = create<Store>()(
         const g = get().game
         if (!g || g.deals.length === 0) return
         // Блокируем на завершённой партии
-        const allClosed = PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
-        if (allClosed || g.finishedManually) return
+        if (isGameFinished(g) || g.frozenAt) return
         const newGame = undoLastDeal(g)
         set({ game: newGame, viewIndex: null })
         const id = get().gameId
@@ -229,7 +236,9 @@ export const useGameStore = create<Store>()(
       finishGame: () => {
         const g = get().game
         if (!g) return
-        const finished: GameState = { ...g, finishedManually: true }
+        // Завершение = заморозка итога. Дальше формулы движка на эту партию
+        // не влияют, сколько бы мы их ни меняли.
+        const finished: GameState = freezeGame({ ...g, finishedManually: true }, Date.now())
         set({ game: finished })
         const id = get().gameId
         if (id) scheduleSync(id, finished)

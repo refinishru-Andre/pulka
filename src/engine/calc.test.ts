@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { calcDeal } from './calc'
-import { applyDeal } from './index'
+import { applyDeal, recomputeState, freezeGame } from './index'
 import { settle, calcNet } from './settle'
 import { nextRaspasState, nextFirstHand, updateEightCounter, isEightRaspasFullCircle } from './raspas'
 import type { Deal, GameState, PlayerId } from './types'
@@ -906,5 +906,48 @@ describe('Стол на четверых — каркас', () => {
     const net = calcNet(state)
     const sum = net.A + net.B + net.C + net.D
     expect(Math.abs(sum)).toBeLessThan(0.001)
+  })
+})
+
+// ============================================================================
+// Заморозка итога сыгранной партии
+// ============================================================================
+
+describe('Вмороженная партия не пересчитывается', () => {
+  const played: Deal = {
+    type: 'game',
+    dealer: 'C',
+    firstHand: 'A',
+    player: 'C',
+    contract: { kind: 'game', level: 7 },
+    playerTricks: 7,
+    vistersTricks: { A: 1, B: 2 },
+    vistDecisions: { A: 'vist', B: 'vist' },
+  }
+
+  it('без метки — пересчитывается из сдач, кеш чинится', () => {
+    const g: GameState = { ...initState(), deals: [played] }
+    // В кеше заведомая чушь — пересчёт обязан её выправить
+    g.pool = { A: 99, B: 99, C: 99, D: 0 }
+    const out = recomputeState(g)
+    expect(out.pool.C).toBe(4)
+    expect(out.pool.A).toBe(0)
+  })
+
+  it('с меткой frozenAt — цифры остаются как записаны, даже неверные', () => {
+    const g: GameState = { ...initState(), deals: [played], frozenAt: 1756200000000 }
+    g.pool = { A: 99, B: 99, C: 99, D: 0 }
+    const out = recomputeState(g)
+    // Ровно то, что было записано: партия сыграна, её итог зафиксирован
+    expect(out.pool).toEqual({ A: 99, B: 99, C: 99, D: 0 })
+    expect(out).toBe(g) // и объект тот же — никакой работы не делалось
+  })
+
+  it('freezeGame ставит метку один раз и не перетирает её', () => {
+    const g: GameState = { ...initState(), deals: [played] }
+    const once = freezeGame(g, 111)
+    expect(once.frozenAt).toBe(111)
+    const twice = freezeGame(once, 222)
+    expect(twice.frozenAt).toBe(111) // повторная заморозка не сдвигает дату
   })
 })
