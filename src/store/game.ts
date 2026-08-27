@@ -204,22 +204,26 @@ export const useGameStore = create<Store>()(
         const id = get().gameId
         if (id) scheduleSync(id, newGame)
       },
+      // Просмотр истории. viewIndex — сколько сдач применено, то есть номер
+      // просматриваемой сдачи. null = смотрим текущий момент.
+      //
+      // Границы: от 1 (нулевая позиция — это не сдача, а расстановка перед
+      // игрой) до последней сдачи включительно. Раньше последнюю посмотреть было
+      // нельзя: стрелка «вперёд» с предпоследней прыгала сразу на текущий
+      // момент, а там показана расстановка уже СЛЕДУЮЩЕЙ сдачи. Выглядело так,
+      // будто первая рука перескочила через игрока.
       viewPrev: () => {
         const g = get().game
         if (!g || g.deals.length === 0) return
         const cur = get().viewIndex ?? g.deals.length
-        // Дальше первой сдачи не отматываем: нулевая позиция — это не сдача,
-        // а расстановка перед игрой, и в общем ряду она только путает.
-        const next = Math.max(1, cur - 1)
-        set({ viewIndex: next === g.deals.length ? null : next })
+        set({ viewIndex: Math.max(1, cur - 1) })
       },
       viewNext: () => {
         const g = get().game
-        if (!g) return
+        if (!g || g.deals.length === 0) return
         const cur = get().viewIndex
-        if (cur === null) return // уже на финале
-        const next = cur + 1
-        set({ viewIndex: next >= g.deals.length ? null : next })
+        if (cur === null) return // уже на текущем моменте
+        set({ viewIndex: Math.min(g.deals.length, cur + 1) })
       },
       viewReset: () => set({ viewIndex: null }),
       deleteLastDeal: () => {

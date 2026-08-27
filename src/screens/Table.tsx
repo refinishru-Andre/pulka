@@ -268,7 +268,7 @@ export function Table({ onBack }: Props = {}) {
           </button>
           <button
             onClick={viewNext}
-            disabled={!viewingHistory}
+            disabled={!viewingHistory || viewIndex === game.deals.length}
             className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
             title="Посмотреть следующую сдачу"
           >
