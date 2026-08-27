@@ -80,8 +80,17 @@ export function Table({ onBack }: Props = {}) {
     return replayTo(game, viewIndex!)
   }, [game, viewIndex, viewingHistory])
 
-  // Сдающий = предыдущий по часовой от firstHand ВИДИМОГО состояния
-  const dealer = prevClockwise(viewed.firstHand, seats)
+  // Первая рука ТОЙ сдачи, которую смотрим. Состояние `viewed` — это уже ПОСЛЕ
+  // неё, то есть расстановка для следующей. Пока смотришь прошлое, показывать
+  // роли будущего нельзя: получалось «Олег сдаёт» и тут же «первая рука был
+  // Олег» — оба верны, но про разные сдачи.
+  const handBeforeLastDeal: PlayerId | null =
+    viewed.deals.length > 0 ? replayTo(game, viewed.deals.length - 1).firstHand : null
+
+  // Чьи роли рисуем на карточках
+  const roleFirstHand =
+    viewingHistory && handBeforeLastDeal ? handBeforeLastDeal : viewed.firstHand
+  const dealer = prevClockwise(roleFirstHand, seats)
 
   const settlement = settle(viewed)
   const minBid = minBidFor(viewed.raspasState)
@@ -103,7 +112,7 @@ export function Table({ onBack }: Props = {}) {
   }
 
   const playerColor = (p: PlayerId) => {
-    if (p === viewed.firstHand) return 'ring-4 ring-yellow-500'
+    if (p === roleFirstHand) return 'ring-4 ring-yellow-500'
     return ''
   }
 
@@ -128,12 +137,6 @@ export function Table({ onBack }: Props = {}) {
     c.level === 6 && c.suit === 'S' ? '6♠ (Сталинград)' : String(c.level)
 
   // Расшифровка последней сдачи текстом
-  // Первая рука САМОЙ последней сдачи — состояние перед ней.
-  // Это не то же самое, что подсвеченный на экране игрок: тот уже первая рука
-  // СЛЕДУЮЩЕЙ сдачи. Раньше обе назывались просто «первая рука», и их путали.
-  const handBeforeLastDeal: PlayerId | null =
-    viewed.deals.length > 0 ? replayTo(game, viewed.deals.length - 1).firstHand : null
-
   const explainLastDeal = (): string[] => {
     if (!lastDeal || !lastDelta) return []
     const lines: string[] = []
@@ -454,7 +457,7 @@ export function Table({ onBack }: Props = {}) {
           </span>
           <span className="font-semibold">{game.players[dealer]}</span>
           <span className="text-slate-400"> · первая рука </span>
-          <span className="font-bold text-yellow-500">{game.players[viewed.firstHand]}</span>
+          <span className="font-bold text-yellow-500">{game.players[roleFirstHand]}</span>
         </div>
       )}
 
@@ -467,8 +470,8 @@ export function Table({ onBack }: Props = {}) {
           const changed = playerHasChanges(p)
           const poolD = lastDelta?.pool[p] ?? 0
           const mountD = lastDelta?.mount[p] ?? 0
-          const changedClass = changed && p !== viewed.firstHand ? 'ring-2 ring-blue-500/50' : ''
-          const isFirstHand = p === viewed.firstHand
+          const changedClass = changed && p !== roleFirstHand ? 'ring-2 ring-blue-500/50' : ''
+          const isFirstHand = p === roleFirstHand
           const isDealer = p === dealer
           // Третий игрок — вторая рука. Полосу рисуем всем, чтобы карточки были
           // одной высоты, а роль читалась с другого конца стола.
