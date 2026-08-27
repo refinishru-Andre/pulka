@@ -206,9 +206,11 @@ export const useGameStore = create<Store>()(
       },
       viewPrev: () => {
         const g = get().game
-        if (!g) return
+        if (!g || g.deals.length === 0) return
         const cur = get().viewIndex ?? g.deals.length
-        const next = Math.max(0, cur - 1)
+        // Дальше первой сдачи не отматываем: нулевая позиция — это не сдача,
+        // а расстановка перед игрой, и в общем ряду она только путает.
+        const next = Math.max(1, cur - 1)
         set({ viewIndex: next === g.deals.length ? null : next })
       },
       viewNext: () => {

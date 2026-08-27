@@ -257,7 +257,7 @@ export function Table({ onBack }: Props = {}) {
           )}
           <button
             onClick={viewPrev}
-            disabled={viewIndex === 0 || game.deals.length === 0}
+            disabled={viewIndex === 1 || game.deals.length === 0}
             className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
             title="Посмотреть предыдущую сдачу"
           >
@@ -448,9 +448,11 @@ export function Table({ onBack }: Props = {}) {
       {!isFinished && (
         <div className="mb-3 px-5 py-2 bg-slate-800 rounded-lg text-center text-base">
           <span className="text-slate-400">
-            {viewingHistory ? 'Следующей была сдача' : 'Следующая сдача'} №{viewed.deals.length + 1}:{' '}
+            {viewingHistory
+              ? `После сдачи №${viewed.deals.length} сдавал `
+              : `Следующая сдача №${viewed.deals.length + 1}: сдаёт `}
           </span>
-          <span className="font-semibold">сдаёт {game.players[dealer]}</span>
+          <span className="font-semibold">{game.players[dealer]}</span>
           <span className="text-slate-400"> · первая рука </span>
           <span className="font-bold text-yellow-500">{game.players[viewed.firstHand]}</span>
         </div>
