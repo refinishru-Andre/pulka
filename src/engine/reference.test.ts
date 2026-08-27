@@ -14,6 +14,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { applyDeal as applyNew } from './index'
+import { raspasLevelFor } from './raspas'
 import type { Deal as DealNew, GameState as StateNew } from './types'
 
 import { applyDeal as applyOld } from './__reference__/index'
@@ -44,7 +45,13 @@ function splitTricks(rnd: () => number, players: Seat[], total: number): Record<
 }
 
 // Одна случайная сдача. dealer/firstHand берутся из текущего состояния партии.
-function randomDeal(rnd: () => number, firstHand: Seat): DealNew & DealOld {
+// Уровень распаса — тоже: приложение никогда не записывает произвольный уровень,
+// он всегда следует из состояния эскалации.
+function randomDeal(
+  rnd: () => number,
+  firstHand: Seat,
+  raspasState: StateNew['raspasState'],
+): DealNew & DealOld {
   const dealerIdx = (SEATS.indexOf(firstHand) + SEATS.length - 1) % SEATS.length
   const dealer = SEATS[dealerIdx]
   const kind = rnd()
@@ -87,7 +94,7 @@ function randomDeal(rnd: () => number, firstHand: Seat): DealNew & DealOld {
     } as DealNew & DealOld
   }
   if (kind < 0.92) {
-    const level = (Math.floor(rnd() * 3) + 1) as 1 | 2 | 3
+    const level = raspasLevelFor(raspasState)
     return {
       type: 'raspas',
       dealer,
@@ -153,7 +160,7 @@ function comparePartiya(seed: number, dealsCount: number, poolLimit: number): st
     if (sNew.firstHand !== sOld.firstHand) {
       return `сдача ${i}: первая рука разошлась — новая ${sNew.firstHand}, старая ${sOld.firstHand}`
     }
-    const deal = randomDeal(rnd, sNew.firstHand as Seat)
+    const deal = randomDeal(rnd, sNew.firstHand as Seat, sNew.raspasState)
     sNew = applyNew(sNew, deal as DealNew)
     sOld = applyOld(sOld, deal as DealOld)
 

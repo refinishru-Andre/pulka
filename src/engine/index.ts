@@ -15,6 +15,7 @@ import {
   updateEightCounter,
   nextClockwise,
   isEightRaspasFullCircle,
+  raspasLevelFor,
 } from './raspas'
 import { ALL_PLAYERS, seatsOf, zeroScores, zeroWhists } from './types'
 import { rulesOf } from './conventions'
@@ -23,7 +24,13 @@ import { rulesOf } from './conventions'
 export function calcDealFull(state: GameState, deal: Deal): DealDelta {
   const seats = seatsOf(state)
   const rules = rulesOf(state)
-  const delta = calcDeal(deal, seats, rules)
+  // Уровень распаса (шестерной / семерной / восьмерной) берём из состояния
+  // партии, а не из записи. Записанный уровень устаревает, если поправить сдачу
+  // в середине: эскалация сдвигается, и у следующих распасов оказалась бы цена
+  // взятки от прежнего расклада. Для нетронутых партий значения совпадают.
+  const effective: Deal =
+    deal.type === 'raspas' ? { ...deal, level: raspasLevelFor(state.raspasState) } : deal
+  const delta = calcDeal(effective, seats, rules)
   // Без предела пули перекрывать нечего: играют на время, считают по последней сдаче
   if (!rules.poolOverflowTransfers) return delta
   // Пуля без предела — перекрывать нечего

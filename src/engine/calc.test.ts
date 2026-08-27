@@ -1250,3 +1250,79 @@ describe('Восьмерные распасы вчетвером, домашни
     expect(s.firstHand).toBe('A')
   })
 })
+
+// ============================================================================
+// Правка сдачи в середине партии
+//
+// Ошибиться при записи легко: не тот игрок, не то число взяток. Раньше поправить
+// можно было только последнюю сдачу, и ошибка тащилась до конца партии — так у
+// Андрея и вышло 26.08.2026. Теперь любую сдачу можно заменить, и партия
+// пересчитывается с неё.
+// ============================================================================
+
+describe('Правка сдачи в середине партии', () => {
+  const played = (player: PlayerId, tricks: number, firstHand: PlayerId): Deal => ({
+    type: 'game',
+    dealer: prevClockwise(firstHand),
+    firstHand,
+    player,
+    contract: { kind: 'game', level: 7 },
+    playerTricks: tricks,
+    vistersTricks: {},
+    vistDecisions: { A: 'pass', B: 'pass', C: 'pass' },
+  })
+
+  it('исправленная партия совпадает с той, где сразу записали правильно', () => {
+    // Записали три сдачи, во второй ошиблись игроком: вместо B поставили C
+    const wrong = [played('A', 7, 'A'), played('C', 7, 'B'), played('A', 7, 'C')]
+    const right = [played('A', 7, 'A'), played('B', 7, 'B'), played('A', 7, 'C')]
+
+    const withMistake = recomputeState({ ...initState(), deals: wrong })
+    // Правим вторую сдачу
+    const fixed = recomputeState({ ...initState(), deals: [wrong[0], right[1], wrong[2]] })
+    const asIfCorrect = recomputeState({ ...initState(), deals: right })
+
+    // Исправленная партия неотличима от той, где ошибки не было
+    expect(fixed.pool).toEqual(asIfCorrect.pool)
+    expect(fixed.mount).toEqual(asIfCorrect.mount)
+    expect(fixed.whists).toEqual(asIfCorrect.whists)
+    // И она действительно отличается от ошибочной
+    expect(fixed.pool).not.toEqual(withMistake.pool)
+  })
+
+  it('правка сдачи пересчитывает переход хода и состояние распасов после неё', () => {
+    const raspas = (firstHand: PlayerId, level: 1 | 2 | 3): Deal => ({
+      type: 'raspas',
+      dealer: prevClockwise(firstHand),
+      firstHand,
+      level,
+      tricks: { A: 4, B: 3, C: 3, D: 0 },
+    })
+    // Два распаса подряд — вышли на восьмерные
+    const deals: Deal[] = [raspas('A', 1), raspas('B', 2)]
+    const before = recomputeState({ ...initState(), deals })
+    expect(before.raspasState).toBe('eightRaspas')
+
+    // Оказалось, что первой сдачи-распаса не было: там сыграли семерную.
+    // Значит распас остался один, и до восьмерных дело не дошло.
+    const corrected: Deal[] = [played('A', 7, 'A'), deals[1]]
+    const after = recomputeState({ ...initState(), deals: corrected })
+    expect(after.raspasState).toBe('afterFirst')
+    expect(minBidFor(after.raspasState)).toBe(7)
+
+    // И цена взятки пересчиталась: распас стал шестерным, а не семерным,
+    // хотя в записи у него по-прежнему стоит уровень 2
+    expect(after.mount.A).toBe(2) // (4−3) × 2, а было бы × 4
+  })
+
+  it('удаление сдачи из середины тоже пересчитывает всё после неё', () => {
+    const deals = [played('A', 7, 'A'), played('B', 7, 'B'), played('C', 7, 'C')]
+    const full = recomputeState({ ...initState(), deals })
+    const without = recomputeState({ ...initState(), deals: [deals[0], deals[2]] })
+    expect(full.deals).toHaveLength(3)
+    expect(without.deals).toHaveLength(2)
+    // У B пуля больше не растёт
+    expect(without.pool.B).toBe(0)
+    expect(full.pool.B).toBe(4)
+  })
+})

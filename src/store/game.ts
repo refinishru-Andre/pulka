@@ -9,6 +9,7 @@ import {
   recomputeState,
   freezeGame,
   isGameFinished as allPoolsClosed,
+  emptyStateFrom,
   type Rules,
 } from '../engine'
 import { uploadGame, type UploadResult } from '../supabase/sync'
@@ -111,6 +112,11 @@ interface Store {
   viewNext: () => void // просмотр: вперёд
   viewReset: () => void // сброс просмотра к финалу
   deleteLastDeal: () => void // РЕАЛЬНОЕ удаление последней сдачи (с подтверждением в UI)
+  // Правка и удаление ЛЮБОЙ сдачи в истории. Ошибиться при записи легко —
+  // не тот игрок, не то число взяток, — а раньше исправить можно было только
+  // последнюю. Из-за этого ошибка тащилась до конца партии.
+  editDealAt: (index: number, deal: Deal) => void
+  deleteDealAt: (index: number) => void
   resetGame: () => void
   discardGame: () => void // выбросить текущую партию БЕЗ откладывания в запас
   recalculate: () => void
@@ -220,6 +226,31 @@ export const useGameStore = create<Store>()(
         // Блокируем на завершённой партии
         if (isGameFinished(g) || g.frozenAt) return
         const newGame = undoLastDeal(g)
+        set({ game: newGame, viewIndex: null })
+        const id = get().gameId
+        if (id) scheduleSync(id, newGame)
+      },
+      // Заменить сдачу и пересчитать партию с начала. Пересчёт обязателен: сдача
+      // могла изменить и переход хода, и состояние распасов, а значит всё, что
+      // было после неё.
+      editDealAt: (index, deal) => {
+        const g = get().game
+        if (!g || index < 0 || index >= g.deals.length) return
+        if (isGameFinished(g) || g.frozenAt) return
+        const deals = [...g.deals]
+        deals[index] = deal
+        const newGame = recomputeState({ ...g, deals })
+        set({ game: newGame, viewIndex: null })
+        const id = get().gameId
+        if (id) scheduleSync(id, newGame)
+      },
+      deleteDealAt: (index) => {
+        const g = get().game
+        if (!g || index < 0 || index >= g.deals.length) return
+        if (isGameFinished(g) || g.frozenAt) return
+        const deals = g.deals.filter((_, i) => i !== index)
+        const newGame =
+          deals.length === 0 ? emptyStateFrom(g) : recomputeState({ ...g, deals })
         set({ game: newGame, viewIndex: null })
         const id = get().gameId
         if (id) scheduleSync(id, newGame)

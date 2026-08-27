@@ -17,59 +17,88 @@ interface Props {
   minBid: number
   raspasState: RaspasState
   onClose: () => void
+  // Правка уже записанной сдачи: её номер в истории и она сама.
+  // Форма открывается заполненной, а «Применить» заменяет сдачу, а не добавляет.
+  edit?: { index: number; deal: Deal }
 }
 
 const GAME_LEVELS: GameLevel[] = [6, 7, 8, 9, 10]
 
 // ============ ОСНОВНОЙ КОМПОНЕНТ ============
 
-export function DealForm({ minBid, raspasState, onClose }: Props) {
+export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
   const game = useGameStore((s) => s.game)!
   const addDeal = useGameStore((s) => s.addDeal)
+  const editDealAt = useGameStore((s) => s.editDealAt)
+
+  const old = edit?.deal
+  // При правке первая рука и сдающий берутся из самой сдачи, а не из текущего
+  // положения партии: правим прошлое, а не настоящее.
+  const firstHand = old?.firstHand ?? game.firstHand
 
   // Кто за столом и по каким правилам считаем — берём из партии
   const seats = seatsOf(game)
   const rules = rulesOf(game)
-  const dealer = prevClockwise(game.firstHand, seats)
-  const [dealType, setDealType] = useState<DealType>('game')
+  const dealer = prevClockwise(firstHand, seats)
+  const [dealType, setDealType] = useState<DealType>(old?.type ?? 'game')
 
   // Состояние всех форм — поднято сюда, чтобы submit-кнопка могла быть в footer
   const initialLevel = Math.max(6, minBid) as GameLevel
-  const [gamePlayer, setGamePlayer] = useState<PlayerId>(game.firstHand)
+  const oldGame = old?.type === 'game' ? old : null
+  const oldMisere = old?.type === 'misere' ? old : null
+  const oldRaspas = old?.type === 'raspas' ? old : null
+  const oldGiveup = old?.type === 'giveup' ? old : null
+  const oldAdjust = old?.type === 'adjust' ? old : null
+  // Развернуть частичную запись сдачи в полную: у неучаствовавших нули
+  const spread = <T,>(src: Partial<Record<PlayerId, T>> | undefined, empty: T): Record<PlayerId, T> => ({
+    A: src?.A ?? empty, B: src?.B ?? empty, C: src?.C ?? empty, D: src?.D ?? empty,
+  })
+
+  const [gamePlayer, setGamePlayer] = useState<PlayerId>(
+    oldGame?.player ?? oldMisere?.player ?? firstHand,
+  )
   // Вчетвером сдающий может вступить вистующим при торговле «пас — полвиста — пас»
-  const [dealerVists, setDealerVists] = useState(false)
+  const [dealerVists, setDealerVists] = useState(
+    oldGame ? oldGame.vistDecisions[prevClockwise(firstHand, seats)] !== undefined : false,
+  )
   // «Быстрые взятки» в прикупе для премии сдатчику: Т/КД = 1, ТК = 2, два туза = 3
-  const [prikupFast, setPrikupFast] = useState(0)
-  const [gameLevel, setGameLevel] = useState<GameLevel>(initialLevel)
+  const [prikupFast, setPrikupFast] = useState(oldGame?.prikupFastTricks ?? 0)
+  const [gameLevel, setGameLevel] = useState<GameLevel>(
+    oldGame?.contract.kind === 'game' ? oldGame.contract.level : initialLevel,
+  )
   // Масть не спрашиваем и не храним — она не влияет ни на одну формулу.
   // Сталинград (6♠, оба обязаны вистовать) тоже не отмечаем: мы записываем ИТОГ
   // сдачи, а не торговлю. Раз оба обязаны — оба и вистовали, так и ставим руками.
   // Отдельного признака для этого не нужно (решение Андрея, 2026-08-26).
-  const [gamePlayerTricks, setGamePlayerTricks] = useState<number>(initialLevel)
-  const [gameVisterTricks, setGameVisterTricks] = useState<Record<PlayerId, number>>({
-    A: 0, B: 0, C: 0, D: 0,
-  })
-  const [gameVistDecisions, setGameVistDecisions] = useState<Record<PlayerId, VistDecision>>({
-    A: 'vist', B: 'vist', C: 'vist', D: 'vist',
-  })
+  const [gamePlayerTricks, setGamePlayerTricks] = useState<number>(
+    oldGame?.playerTricks ?? initialLevel,
+  )
+  const [gameVisterTricks, setGameVisterTricks] = useState<Record<PlayerId, number>>(
+    spread(oldGame?.vistersTricks, 0),
+  )
+  const [gameVistDecisions, setGameVistDecisions] = useState<Record<PlayerId, VistDecision>>(
+    spread<VistDecision>(oldGame?.vistDecisions, 'vist'),
+  )
 
-  const [misPlayer, setMisPlayer] = useState<PlayerId>(game.firstHand)
-  const [misTricks, setMisTricks] = useState(0)
+  const [misPlayer, setMisPlayer] = useState<PlayerId>(oldMisere?.player ?? firstHand)
+  const [misTricks, setMisTricks] = useState(oldMisere?.playerTricks ?? 0)
 
-  const [raspasTricks, setRaspasTricks] = useState<Record<PlayerId, number>>({
-    A: 0, B: 0, C: 0, D: 0,
-  })
+  const [raspasTricks, setRaspasTricks] = useState<Record<PlayerId, number>>(
+    spread(oldRaspas?.tricks, 0),
+  )
 
   // Ручная корректировка: штраф судьи, поправка ошибки, любая договорённость,
   // которую движок не знает. Величина ничем не ограничена.
-  const [adjPlayer, setAdjPlayer] = useState<PlayerId>(game.firstHand)
-  const [adjTarget, setAdjTarget] = useState<AdjustTarget>('mount')
-  const [adjTo, setAdjTo] = useState<PlayerId>(prevClockwise(game.firstHand, seats))
-  const [adjAmount, setAdjAmount] = useState('')
-  const [adjNote, setAdjNote] = useState('')
+  const [adjPlayer, setAdjPlayer] = useState<PlayerId>(oldAdjust?.player ?? firstHand)
+  const [adjTarget, setAdjTarget] = useState<AdjustTarget>(oldAdjust?.target ?? 'mount')
+  const [adjTo, setAdjTo] = useState<PlayerId>(oldAdjust?.to ?? prevClockwise(firstHand, seats))
+  const [adjAmount, setAdjAmount] = useState(oldAdjust ? String(oldAdjust.amount) : '')
+  const [adjNote, setAdjNote] = useState(oldAdjust?.note ?? '')
 
-  const [giveupPlayer, setGiveupPlayer] = useState<PlayerId>(game.firstHand)
-  const [giveupLevel, setGiveupLevel] = useState<GameLevel>(initialLevel)
+  const [giveupPlayer, setGiveupPlayer] = useState<PlayerId>(oldGiveup?.player ?? firstHand)
+  const [giveupLevel, setGiveupLevel] = useState<GameLevel>(
+    oldGiveup?.contract.kind === 'game' ? oldGiveup.contract.level : initialLevel,
+  )
 
   // Валидация и построение сдачи
   const { canSubmit, buildDeal } = useMemo(() => {
@@ -91,7 +120,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         buildDeal: (): Deal => ({
           type: 'game',
           dealer,
-          firstHand: game.firstHand,
+          firstHand,
           player: gamePlayer,
           contract,
           // Для автомат-сценариев ставим playerTricks=level и vistersTricks=0
@@ -109,7 +138,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         buildDeal: (): Deal => ({
           type: 'misere',
           dealer,
-          firstHand: game.firstHand,
+          firstHand,
           player: misPlayer,
           blind: false, // тип мизера не влияет на расчёт
           playerTricks: misTricks,
@@ -125,7 +154,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         buildDeal: (): Deal => ({
           type: 'raspas',
           dealer,
-          firstHand: game.firstHand,
+          firstHand,
           level: raspasLevelFor(raspasState),
           tricks: pickBy(players, (p) => raspasTricks[p]),
         }),
@@ -143,7 +172,7 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         buildDeal: (): Deal => ({
           type: 'adjust',
           dealer,
-          firstHand: game.firstHand,
+          firstHand,
           player: adjPlayer,
           target: adjTarget,
           ...(adjTarget === 'whists' ? { to: adjTo } : {}),
@@ -158,13 +187,13 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
       buildDeal: (): Deal => ({
         type: 'giveup',
         dealer,
-        firstHand: game.firstHand,
+        firstHand,
         player: giveupPlayer,
         contract: { kind: 'game', level: giveupLevel },
       }),
     }
   }, [
-    dealType, game.firstHand, seats, dealer, rules, dealerVists, prikupFast,
+    dealType, firstHand, seats, dealer, rules, dealerVists, prikupFast,
     gamePlayer, gameLevel, gamePlayerTricks,
     gameVisterTricks, gameVistDecisions, misPlayer, misTricks,
     adjPlayer, adjTarget, adjTo, adjAmount, adjNote,
@@ -173,7 +202,8 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
 
   const handleSubmit = () => {
     if (!canSubmit) return
-    addDeal(buildDeal())
+    if (edit) editDealAt(edit.index, buildDeal())
+    else addDeal(buildDeal())
     onClose()
   }
 
@@ -183,7 +213,9 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
         {/* HEADER (не скроллится) */}
         <div className="px-5 pt-4 pb-3 border-b border-slate-700">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xl font-bold">Записать сдачу</h2>
+            <h2 className="text-xl font-bold">
+              {edit ? `Правка сдачи №${edit.index + 1}` : 'Записать сдачу'}
+            </h2>
             <div className="text-xs text-slate-400">
               Первая рука: <span className="font-semibold text-yellow-500">{game.players[game.firstHand]}</span>
               <span className="ml-3">Мин: <span className="font-semibold text-slate-200">{minBid}</span></span>

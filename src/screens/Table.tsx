@@ -53,10 +53,14 @@ export function Table({ onBack }: Props = {}) {
   const viewNext = useGameStore((s) => s.viewNext)
   const viewReset = useGameStore((s) => s.viewReset)
   const deleteLastDeal = useGameStore((s) => s.deleteLastDeal)
+  const deleteDealAt = useGameStore((s) => s.deleteDealAt)
   const resetGame = useGameStore((s) => s.resetGame)
   const finishGame = useGameStore((s) => s.finishGame)
   const syncState = useSyncStatus((s) => s.state)
   const [dealFormOpen, setDealFormOpen] = useState(false)
+  // Правка сдачи из истории: её номер. null — обычная запись новой сдачи.
+  const [editIndex, setEditIndex] = useState<number | null>(null)
+  const [confirmDeleteDeal, setConfirmDeleteDeal] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -256,6 +260,50 @@ export function Table({ onBack }: Props = {}) {
             >
               ⤓ К текущей
             </button>
+          )}
+          {/* Правка любой сдачи. Ошибиться при записи легко — не тот игрок,
+              не то число взяток. Раньше поправить можно было только последнюю,
+              и ошибка тащилась до конца партии. */}
+          {viewingHistory && !isFinished && viewIndex! > 0 && (
+            <>
+              <button
+                onClick={() => {
+                  setEditIndex(viewIndex! - 1)
+                  setDealFormOpen(true)
+                }}
+                className="px-4 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-base font-semibold"
+                title="Исправить эту сдачу — партия пересчитается с неё"
+              >
+                ✏️ Исправить сдачу {viewIndex}
+              </button>
+              {confirmDeleteDeal ? (
+                <>
+                  <button
+                    onClick={() => {
+                      deleteDealAt(viewIndex! - 1)
+                      setConfirmDeleteDeal(false)
+                    }}
+                    className="px-4 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-base font-bold"
+                  >
+                    Точно удалить?
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteDeal(false)}
+                    className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+                  >
+                    Нет
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setConfirmDeleteDeal(true)}
+                  className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+                  title="Убрать эту сдачу из партии"
+                >
+                  🗑 Удалить сдачу {viewIndex}
+                </button>
+              )}
+            </>
           )}
           {!isFinished && !viewingHistory && (
             confirmDelete ? (
@@ -502,7 +550,15 @@ export function Table({ onBack }: Props = {}) {
       )}
 
       {dealFormOpen && !isFinished && !viewingHistory && (
-        <DealForm minBid={minBid} raspasState={game.raspasState} onClose={() => setDealFormOpen(false)} />
+        <DealForm
+          minBid={editIndex === null ? minBid : minBidFor(replayTo(game, editIndex).raspasState, rulesOf(game))}
+          raspasState={editIndex === null ? game.raspasState : replayTo(game, editIndex).raspasState}
+          edit={editIndex === null ? undefined : { index: editIndex, deal: game.deals[editIndex] }}
+          onClose={() => {
+            setDealFormOpen(false)
+            setEditIndex(null)
+          }}
+        />
       )}
 
       {/* Sticky-футер */}
@@ -517,7 +573,10 @@ export function Table({ onBack }: Props = {}) {
           </div>
         ) : (
           <button
-            onClick={() => setDealFormOpen(true)}
+            onClick={() => {
+              setEditIndex(null)
+              setDealFormOpen(true)
+            }}
             className="w-full py-5 bg-green-600 hover:bg-green-500 rounded-2xl text-2xl font-bold shadow-lg"
           >
             + Записать сдачу
