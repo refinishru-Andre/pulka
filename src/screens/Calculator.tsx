@@ -38,7 +38,7 @@ const num = (v: string): number => {
 function NumField({
   value,
   onChange,
-  width = 'w-24',
+  width = 'w-full',
 }: {
   value: string
   onChange: (v: string) => void
@@ -172,49 +172,78 @@ export function Calculator({ onBack }: Props) {
             </div>
           </div>
 
-          {/* По строке на игрока — как в бумажной пульке */}
-          <div className="space-y-3">
-            <div className="text-sm text-slate-300">
+          {/* Таблица как в пульке: столбец на игрока, сверху вниз гора, пуля, висты */}
+          <div className="overflow-x-auto">
+            <div className="text-sm text-slate-300 mb-3">
               Впишите числа из пульки. Пустое поле — ноль.
             </div>
-            {seats.map((p, idx) => (
-              <div key={p} className="bg-slate-900 rounded-xl p-3 space-y-3">
-                <input
-                  type="text"
-                  value={names[p]}
-                  onChange={(e) => setNames({ ...names, [p]: e.target.value })}
-                  placeholder={`Игрок ${idx + 1}`}
-                  className="w-full px-3 py-2 bg-slate-700 border-2 border-slate-500 rounded-lg text-lg font-bold text-white placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-yellow-500 focus:bg-slate-600"
-                />
-                <div className="flex items-center gap-4 flex-wrap">
-                  <label className="flex items-center gap-2">
-                    <span className="text-sm text-slate-400">Пуля</span>
-                    <NumField value={pool[p]} onChange={(v) => setPool({ ...pool, [p]: v })} />
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <span className="text-sm text-slate-400">Гора</span>
-                    <NumField value={mount[p]} onChange={(v) => setMount({ ...mount, [p]: v })} />
-                  </label>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-sm text-slate-400">Висты на</span>
-                  {seats
-                    .filter((to) => to !== p)
-                    .map((to) => (
-                      <label key={to} className="flex items-center gap-2">
-                        <span className="text-sm text-slate-300">
-                          {nameOf(to, seats.indexOf(to))}
-                        </span>
-                        <NumField
-                          value={whists[whistKey(p, to)] ?? ''}
-                          onChange={(v) => setWhists({ ...whists, [whistKey(p, to)]: v })}
-                          width="w-20"
-                        />
-                      </label>
-                    ))}
-                </div>
-              </div>
-            ))}
+            <table className="w-full border-separate border-spacing-2">
+              <thead>
+                <tr>
+                  <th className="w-28" />
+                  {seats.map((p, idx) => (
+                    <th key={p} className="min-w-32">
+                      <input
+                        type="text"
+                        value={names[p]}
+                        onChange={(e) => setNames({ ...names, [p]: e.target.value })}
+                        placeholder={`Игрок ${idx + 1}`}
+                        className="w-full px-3 py-2 bg-slate-700 border-2 border-slate-500 rounded-lg text-center text-base font-bold text-white placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-yellow-500 focus:bg-slate-600"
+                      />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="text-right text-sm text-slate-400 pr-1">Гора</td>
+                  {seats.map((p) => (
+                    <td key={p}>
+                      <NumField value={mount[p]} onChange={(v) => setMount({ ...mount, [p]: v })} />
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td className="text-right text-sm text-slate-400 pr-1">Пуля</td>
+                  {seats.map((p) => (
+                    <td key={p}>
+                      <NumField value={pool[p]} onChange={(v) => setPool({ ...pool, [p]: v })} />
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td
+                    colSpan={seats.length + 1}
+                    className="pt-3 text-sm text-slate-300 border-t border-slate-700"
+                  >
+                    Висты — сколько записано на игрока в каждом столбце
+                  </td>
+                </tr>
+                {seats.map((target, i) => (
+                  <tr key={target}>
+                    <td className="text-right text-sm text-slate-400 pr-1 truncate">
+                      на {nameOf(target, i)}
+                    </td>
+                    {seats.map((from) =>
+                      from === target ? (
+                        <td key={from} className="text-center text-slate-600 text-xl">
+                          —
+                        </td>
+                      ) : (
+                        <td key={from}>
+                          <NumField
+                            value={whists[whistKey(from, target)] ?? ''}
+                            onChange={(v) =>
+                              setWhists({ ...whists, [whistKey(from, target)]: v })
+                            }
+                          />
+                        </td>
+                      ),
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
