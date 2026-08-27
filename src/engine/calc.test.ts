@@ -1176,3 +1176,77 @@ describe('Восьмерные распасы: сценарий из живой 
     expect(s.raspasState).toBe('eightRaspas')
   })
 })
+
+// ============================================================================
+// Восьмерные распасы ВЧЕТВЕРОМ по домашним конвенциям.
+// Требование Андрея: те же правила, что втроём. Главное — полный круг должен
+// ждать ВСЕХ ЧЕТВЕРЫХ, а не троих.
+// ============================================================================
+
+describe('Восьмерные распасы вчетвером, домашние правила', () => {
+  const SEATS: PlayerId[] = ['A', 'B', 'C', 'D']
+  const start = (): GameState => ({
+    ...initState(),
+    players: { A: 'А', B: 'Б', C: 'В', D: 'Г' },
+    seats: SEATS,
+  })
+  // Взятки на распасе вчетвером — в сумме 10
+  const raspas = (firstHand: PlayerId, level: 1 | 2 | 3): Deal => ({
+    type: 'raspas',
+    dealer: prevClockwise(firstHand, SEATS),
+    firstHand,
+    level,
+    tricks: { A: 3, B: 3, C: 2, D: 2 },
+  })
+
+  it('круг ждёт всех четверых, а не троих', () => {
+    let s = start()
+    s = applyDeal(s, raspas('A', 1)) // шестерной, взятка 2
+    expect(s.raspasState).toBe('afterFirst')
+    s = applyDeal(s, raspas('B', 2)) // семерной, взятка 4 → пошли восьмерные
+    expect(s.raspasState).toBe('eightRaspas')
+    expect(s.eightRaspasCounter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
+    expect(s.firstHand).toBe('C')
+
+    // Три восьмерных распаса: отсидели C, D, A — но Б ещё нет
+    s = applyDeal(s, raspas('C', 3))
+    s = applyDeal(s, raspas('D', 3))
+    s = applyDeal(s, raspas('A', 3))
+    expect(s.raspasState).toBe('eightRaspas') // втроём тут круг бы уже закрылся
+    expect(s.firstHand).toBe('B')
+
+    // И только когда сел четвёртый — восьмерные кончаются
+    s = applyDeal(s, raspas('B', 3))
+    expect(s.raspasState).toBe('normal')
+    expect(minBidFor(s.raspasState)).toBe(6)
+  })
+
+  it('уход без трёх оставляет руку и вчетвером', () => {
+    let s = start()
+    s = applyDeal(s, raspas('A', 1))
+    s = applyDeal(s, raspas('B', 2))
+    const hand = s.firstHand
+    expect(hand).toBe('C')
+    s = applyDeal(s, {
+      type: 'giveup',
+      dealer: prevClockwise('C', SEATS),
+      firstHand: 'C',
+      player: 'A',
+      contract: { kind: 'game', level: 8 },
+    })
+    expect(s.firstHand).toBe('C')
+    expect(s.raspasState).toBe('eightRaspas')
+  })
+
+  it('рука обходит все четыре места, а не три', () => {
+    let s = start()
+    s = applyDeal(s, raspas('A', 1))
+    expect(s.firstHand).toBe('B')
+    s = applyDeal(s, raspas('B', 2))
+    expect(s.firstHand).toBe('C')
+    s = applyDeal(s, raspas('C', 3))
+    expect(s.firstHand).toBe('D')
+    s = applyDeal(s, raspas('D', 3))
+    expect(s.firstHand).toBe('A')
+  })
+})
