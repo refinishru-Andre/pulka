@@ -22,7 +22,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { applyDeal, emptyStateFrom, minBidFor } from '../src/engine'
+import { applyDeal, emptyStateFrom, minBidFor, RASPAS_LEVEL_NAME } from '../src/engine'
 import { seatsOf } from '../src/engine/types'
 import type { GameState, Deal, PlayerId, Seats } from '../src/engine/types'
 
@@ -73,10 +73,10 @@ interface CloudGame {
 }
 
 const RASPAS_LABEL: Record<string, string> = {
-  normal: 'обычная',
-  afterFirst: 'после 1-го',
-  afterSecond: 'после 2-го',
-  eightRaspas: '8-МЕРНЫЕ',
+  normal: 'обычная игра',
+  afterFirst: 'после шестерного',
+  afterSecond: 'после семерного',
+  eightRaspas: 'ВОСЬМЕРНЫЕ',
 }
 
 function toGameState(c: CloudGame): GameState {
@@ -117,7 +117,7 @@ function describeDeal(deal: Deal, names: Record<PlayerId, string>): string {
       const t = Object.entries(deal.tricks)
         .map(([p, n]) => `${who(p as PlayerId)}=${n}`)
         .join(' ')
-      return `РАСПАС ур.${deal.level} | ${t}`
+      return `РАСПАС ${RASPAS_LEVEL_NAME[deal.level].toUpperCase()} | ${t}`
     }
     case 'giveup':
       return `${who(deal.player)} УХОД БЕЗ 3 на ${deal.contract.kind === 'game' ? deal.contract.level : '?'}`

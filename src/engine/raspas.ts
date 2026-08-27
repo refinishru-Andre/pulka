@@ -179,3 +179,31 @@ export function raspasLevelFor(raspasState: RaspasState): 1 | 2 | 3 {
       return 3
   }
 }
+
+// Как распас называется за столом. Уровень — это не порядковый номер, а заказ,
+// от которого играют дальше: шестерной поднимает минимум до 7, семерной до 8,
+// восьмерной оставляет 8.
+export const RASPAS_LEVEL_NAME: Record<1 | 2 | 3, string> = {
+  1: 'шестерной',
+  2: 'семерной',
+  3: 'восьмерной',
+}
+
+// Подпись текущего состояния для экрана. Говорит две вещи: от чего заказывать
+// и действует ли особое правило восьмерных.
+export function raspasStateLabel(raspasState: RaspasState, rules: Rules = HOME_RULES): string {
+  const min = minBidFor(raspasState, rules)
+  switch (raspasState) {
+    case 'normal':
+      return `Обычная игра · заказ от ${min}`
+    case 'afterFirst':
+      return `После шестерного распаса · заказ от ${min}`
+    case 'afterSecond':
+      // Старое состояние, в новых партиях не возникает — оставлено для истории
+      return `После семерного распаса · заказ от ${min}`
+    case 'eightRaspas':
+      return rules.firstHandStaysOnFailedHighGame
+        ? `Восьмерные распасы · заказ от ${min} · рука остаётся при несыгранной`
+        : `Восьмерные распасы · заказ от ${min}`
+  }
+}

@@ -2,7 +2,13 @@ import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
 import type { Deal, PlayerId, GameLevel, VistDecision, Contract, RaspasState } from '../engine/types'
 import { seatsOf } from '../engine/types'
-import { raspasLevelFor, raspasCostFor, prevClockwise, rulesOf, halfVistTricks } from '../engine'
+import {
+  raspasLevelFor,
+  prevClockwise,
+  rulesOf,
+  halfVistTricks,
+  RASPAS_LEVEL_NAME,
+} from '../engine'
 
 type DealType = 'game' | 'misere' | 'raspas' | 'giveup' | 'adjust'
 type AdjustTarget = 'mount' | 'pool' | 'whists'
@@ -207,7 +213,8 @@ export function DealForm({ minBid, raspasState, onClose }: Props) {
               >
                 {t === 'game' && 'Игра'}
                 {t === 'misere' && 'Мизер'}
-                {t === 'raspas' && `Распас ${raspasCostFor(raspasState, rules)}/вз`}
+                {t === 'raspas' &&
+                  `${RASPAS_LEVEL_NAME[raspasLevelFor(raspasState)]} распас`}
                 {t === 'giveup' && 'Без 3'}
                 {t === 'adjust' && '✏️ Правка'}
               </button>
@@ -627,12 +634,12 @@ function RaspasFormFields(props: {
   const total = players.reduce((sum, p) => sum + tricks[p], 0)
   const tricksOk = total === 10
   const cost = rules.raspasCostLadder[Math.min(level - 1, rules.raspasCostLadder.length - 1)]
-  const levelLabel = level === 1 ? 'обычный' : level === 2 ? '2-й' : '8-мерный'
+  const levelLabel = RASPAS_LEVEL_NAME[level]
 
   return (
     <div className="space-y-3">
       <div className="px-3 py-2 bg-slate-900 rounded-lg text-sm">
-        Распас {levelLabel} · цена {cost} за взятку ·{' '}
+        {levelLabel[0].toUpperCase() + levelLabel.slice(1)} распас · взятка {cost} ·{' '}
         {rules.raspasWriteEveryTrick ? 'в гору за каждую взятку' : 'амнистия минимума'}
         {players.length === 4 && (
           <div className="text-xs text-slate-400 mt-1">

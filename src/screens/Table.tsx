@@ -1,7 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
 import { useSyncStatus } from '../store/sync-status'
-import { settle, minBidFor, applyDeal, emptyStateFrom, prevClockwise, isGameFinished } from '../engine'
+import {
+  settle,
+  minBidFor,
+  applyDeal,
+  emptyStateFrom,
+  prevClockwise,
+  isGameFinished,
+  rulesOf,
+  raspasStateLabel,
+  RASPAS_LEVEL_NAME,
+} from '../engine'
 import { zeroWhists, seatsOf } from '../engine/types'
 import type { PlayerId, GameState } from '../engine/types'
 import { DealForm } from './DealForm'
@@ -10,13 +20,6 @@ import { DealForm } from './DealForm'
 function replayTo(game: GameState, upTo: number): GameState {
   const initial = emptyStateFrom(game, game.deals[0]?.firstHand ?? game.firstHand)
   return game.deals.slice(0, upTo).reduce(applyDeal, initial)
-}
-
-const RASPAS_LABEL: Record<string, string> = {
-  normal: 'Обычная игра · мин 6',
-  afterFirst: 'После 1-го распаса · мин 7',
-  afterSecond: 'После 2-го распаса · мин 8',
-  eightRaspas: '8-мерные распасы · мин 8',
 }
 
 // Значок в шапке: доехала ли последняя сдача до облака.
@@ -141,9 +144,9 @@ export function Table({ onBack }: Props = {}) {
         `${player} мизер${lastDeal.blind ? ' б/п' : ''}, ${lastDeal.playerTricks === 0 ? 'сыграл' : `поймали ${lastDeal.playerTricks}`}.`,
       )
     } else if (lastDeal.type === 'raspas') {
-      const levelName = lastDeal.level === 1 ? '1-й' : lastDeal.level === 2 ? '2-й' : '8-мерный'
+      const name = RASPAS_LEVEL_NAME[lastDeal.level]
       lines.push(
-        `Распас ${levelName}: ` +
+        `Распас ${name}: ` +
           seats.map((p) => `${game.players[p]}=${lastDeal.tricks[p] ?? 0}`).join(', '),
       )
     } else if (lastDeal.type === 'giveup' && lastDeal.contract.kind === 'game') {
@@ -361,11 +364,14 @@ export function Table({ onBack }: Props = {}) {
       {/* Состояние распасов */}
       <div className="mb-5 px-5 py-3 bg-slate-800 rounded-lg text-center text-base">
         <span className="text-slate-400">Состояние: </span>
-        <span className="font-bold">{RASPAS_LABEL[viewed.raspasState]}</span>
+        <span className="font-bold">{raspasStateLabel(viewed.raspasState, rulesOf(viewed))}</span>
         {viewed.raspasState === 'eightRaspas' && (
           <span className="text-slate-400 ml-3">
-            · круг:{' '}
-            {seats.map((p) => `${game.players[p].slice(0, 3)}=${viewed.eightRaspasCounter[p]}`).join(', ')}
+            · кто уже сидел первой рукой:{' '}
+            {seats
+              .filter((p) => viewed.eightRaspasCounter[p] > 0)
+              .map((p) => game.players[p])
+              .join(', ') || 'ещё никто'}
           </span>
         )}
       </div>
