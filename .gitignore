@@ -13,3 +13,6 @@ Thumbs.db
 *.log
 .vite/
 *.tsbuildinfo
+
+# Выгрузка партии для разбора — не мусорить в репозитории
+game-dump.json

@@ -8,10 +8,15 @@
  * Ключ берётся из файла .env в корне проекта (строка SERVICE_KEY=...).
  * Значение нигде не печатается.
  *
+ * Два источника данных:
+ *   1) файл-выгрузка из базы — ключ не нужен вообще;
+ *   2) прямо из облака — тогда нужен SERVICE_KEY в .env.
+ *
  * Запуск:
- *   npx tsx scripts/inspect-game.ts              — список партий
- *   npx tsx scripts/inspect-game.ts <id>         — разбор партии целиком
- *   npx tsx scripts/inspect-game.ts <id> 30 40   — только сдачи с 30-й по 40-ю
+ *   npx tsx scripts/inspect-game.ts --file dump.json          — разбор из выгрузки
+ *   npx tsx scripts/inspect-game.ts --file dump.json 30 40    — только сдачи 30-40
+ *   npx tsx scripts/inspect-game.ts                           — список партий из облака
+ *   npx tsx scripts/inspect-game.ts <id> 30 40                — разбор из облака
  */
 import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
@@ -41,7 +46,12 @@ function readServiceKey(): string {
   process.exit(1)
 }
 
-const supabase = createClient(SUPABASE_URL, readServiceKey(), { db: { schema: 'pulka' } })
+// Клиент создаём лениво: при разборе из файла ключ не нужен и спрашивать его незачем
+let client: ReturnType<typeof createClient> | null = null
+const db = () => {
+  if (!client) client = createClient(SUPABASE_URL, readServiceKey(), { db: { schema: 'pulka' } })
+  return client
+}
 
 interface CloudGame {
   id: string
@@ -117,7 +127,7 @@ function describeDeal(deal: Deal, names: Record<PlayerId, string>): string {
 }
 
 async function listGames() {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('games')
     .select('*')
     .order('created_at', { ascending: false })
@@ -139,12 +149,33 @@ async function listGames() {
 }
 
 async function inspect(gameId: string, from: number, to: number) {
-  const { data, error } = await supabase.from('games').select('*').eq('id', gameId).single()
+  const { data, error } = await db().from('games').select('*').eq('id', gameId).single()
   if (error || !data) {
     console.error('Партия не найдена:', error?.message)
     process.exit(1)
   }
-  const c = data as CloudGame
+  report(data as CloudGame, from, to)
+}
+
+// Разбор выгрузки из файла. Внутри может быть одна партия или список — берём ту,
+// где больше всего сдач: обычно она и есть та, о которой идёт речь.
+function inspectFile(path: string, from: number, to: number) {
+  const raw = JSON.parse(readFileSync(resolve(path), 'utf8'))
+  const list: CloudGame[] = Array.isArray(raw) ? raw : raw.games ?? [raw]
+  if (list.length === 0) {
+    console.error('В файле нет партий')
+    process.exit(1)
+  }
+  const sorted = [...list].sort((a, b) => (b.state?.deals?.length ?? 0) - (a.state?.deals?.length ?? 0))
+  if (list.length > 1) {
+    console.log(`В файле партий: ${list.length}. Разбираю самую длинную.
+`)
+  }
+  report(sorted[0], from, to)
+}
+
+function report(c: CloudGame, from: number, to: number) {
+  const gameId = c.id
   const game = toGameState(c)
   const seats = seatsOf(game)
   const names = game.players
@@ -188,9 +219,11 @@ async function inspect(gameId: string, from: number, to: number) {
   })
 }
 
-const arg = process.argv[2]
-if (!arg) {
+const args = process.argv.slice(2)
+if (args[0] === '--file') {
+  inspectFile(args[1], Number(args[2] ?? 1), Number(args[3] ?? 9999))
+} else if (!args[0]) {
   listGames()
 } else {
-  inspect(arg, Number(process.argv[3] ?? 1), Number(process.argv[4] ?? 9999))
+  inspect(args[0], Number(args[1] ?? 1), Number(args[2] ?? 9999))
 }
