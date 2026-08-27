@@ -1326,3 +1326,41 @@ describe('Правка сдачи в середине партии', () => {
     expect(full.pool.B).toBe(4)
   })
 })
+
+// ============================================================================
+// Курс перевода в висты влияет на итог
+//
+// Ленинградка: очко пули = 2 очка горы. Сочинка, ростов, классика: 1 к 1.
+// В калькуляторе курс выбирается кнопкой, и от него зависит не только величина
+// итога, но и кто кого обыграл.
+// ============================================================================
+
+describe('Курс перевода в висты', () => {
+  const withRate = (poolToVists: number): GameState => ({
+    ...initState(),
+    rules: { ...HOME_RULES, poolToVists, mountToVists: 10 },
+    pool: { ...zeroScores(), A: 21, B: 10, C: 4 },
+    mount: { ...zeroScores(), A: 60, B: 120, C: 40 },
+  })
+
+  it('ленинградка и сочинка дают разный итог', () => {
+    const len = settle(withRate(20)).net
+    const soch = settle(withRate(10)).net
+    expect(len).not.toEqual(soch)
+  })
+
+  it('на этих числах меняется даже то, кто впереди', () => {
+    const len = settle(withRate(20)).net
+    const soch = settle(withRate(10)).net
+    // По ленинградке впереди A, по сочинке — C
+    expect(len.A).toBeGreaterThan(len.C)
+    expect(soch.C).toBeGreaterThan(soch.A)
+  })
+
+  it('при любом курсе сумма сходится в ноль', () => {
+    for (const rate of [10, 20]) {
+      const net = calcNet(withRate(rate))
+      expect(Math.abs(net.A + net.B + net.C)).toBeLessThan(0.001)
+    }
+  })
+})
