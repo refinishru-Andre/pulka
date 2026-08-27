@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { GameState, PlayerId, Seats } from '../engine/types'
 import { ALL_PLAYERS, zeroScores, zeroWhists } from '../engine/types'
-import { settle } from '../engine'
+import { settle, gameResultText } from '../engine'
 import { HOME_RULES } from '../engine/conventions'
 
 interface Props {
@@ -135,30 +135,9 @@ export function Calculator({ onBack }: Props) {
 
   const result = settle(state)
 
-  // Итог одним куском текста — чтобы отдать людям за соседним столом
-  const resultText = (): string => {
-    const lines: string[] = ['Пулька — итог']
-    seats.forEach((p, i) => {
-      lines.push(
-        `${nameOf(p, i)}: пуля ${num(pool[p])}, гора ${num(mount[p])}, итог ${
-          result.net[p] > 0 ? '+' : ''
-        }${result.net[p]}`,
-      )
-    })
-    lines.push('')
-    if (result.pairwise.length === 0) lines.push('Никто никому ничего не должен')
-    else
-      result.pairwise.forEach((d) =>
-        lines.push(`${state.players[d.from]} должен ${state.players[d.to]} ${d.amount} вистов`),
-      )
-    lines.push('')
-    lines.push(`Курс: ${rate.name} (${rate.hint})`)
-    return lines.join(String.fromCharCode(10))
-  }
-
   const copyResult = async () => {
     try {
-      await navigator.clipboard.writeText(resultText())
+      await navigator.clipboard.writeText(gameResultText(state, 'Пулька — расчёт'))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {

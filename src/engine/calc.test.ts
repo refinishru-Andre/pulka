@@ -6,6 +6,7 @@ import { calcDeal } from './calc'
 import { applyDeal, recomputeState, freezeGame } from './index'
 import { prevClockwise, minBidFor } from './raspas'
 import { settle, calcNet } from './settle'
+import { gameResultText } from './report'
 import {
   rulesOf, ladderAt, halfVistTricks, HOME_RULES, FSPR_RULES,
 } from './conventions'
@@ -1362,5 +1363,26 @@ describe('Курс перевода в висты', () => {
       const net = calcNet(withRate(rate))
       expect(Math.abs(net.A + net.B + net.C)).toBeLessThan(0.001)
     }
+  })
+})
+
+describe('Итог партии текстом', () => {
+  it('содержит имена, числа, долги и правила', () => {
+    const g: GameState = {
+      ...initState(),
+      players: { A: 'Дмитрий', B: 'Олег', C: 'Андрей', D: '' },
+      pool: { ...zeroScores(), A: 21, B: 10, C: 4 },
+      mount: { ...zeroScores(), A: 60, B: 120, C: 40 },
+    }
+    const text = gameResultText(g)
+    expect(text).toContain('Дмитрий: пуля 21, гора 60')
+    expect(text).toContain('Олег: пуля 10, гора 120')
+    expect(text).toContain('должен')
+    expect(text).toContain('Правила: Дом (Андрей)')
+  })
+
+  it('когда все в нуле — так и написано', () => {
+    const text = gameResultText(initState())
+    expect(text).toContain('Никто никому ничего не должен')
   })
 })

@@ -11,6 +11,7 @@ import {
   rulesOf,
   raspasStateLabel,
   RASPAS_LEVEL_NAME,
+  gameResultText,
 } from '../engine'
 import { zeroWhists, seatsOf } from '../engine/types'
 import type { PlayerId, GameState } from '../engine/types'
@@ -61,6 +62,7 @@ export function Table({ onBack }: Props = {}) {
   // Правка сдачи из истории: её номер. null — обычная запись новой сдачи.
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [confirmDeleteDeal, setConfirmDeleteDeal] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -535,7 +537,25 @@ export function Table({ onBack }: Props = {}) {
       {/* Попарные долги */}
       {settlement.pairwise.length > 0 && (
         <div className="mb-6 bg-slate-800 rounded-2xl p-5">
-          <div className="text-base text-slate-400 mb-3 font-semibold">Кто кому должен (висты)</div>
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <div className="text-base text-slate-400 font-semibold">Кто кому должен (висты)</div>
+            {/* Отправить итог людям: сыгранную партию раньше некуда было деть */}
+            <button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(gameResultText(viewed))
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                } catch {
+                  setCopied(false)
+                }
+              }}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg font-semibold text-sm"
+              title="Скопировать итог текстом — можно отправить в переписке"
+            >
+              {copied ? '✓ Скопировано' : '📋 Скопировать итог'}
+            </button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {settlement.pairwise.map((d, i) => (
               <div key={i} className="bg-slate-900 rounded-lg px-5 py-4 flex items-center justify-between">
