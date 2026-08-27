@@ -29,6 +29,33 @@ const num = (v: string): number => {
   return Number.isFinite(n) ? n : 0
 }
 
+// Поле ввода числа. Специально светлее и с рамкой: в остальном приложении
+// тёмные плашки — это кнопки, и поле ввода принимали за кнопку.
+//
+// ВАЖНО: объявлено НА УРОВНЕ ФАЙЛА, а не внутри Calculator. Компонент, созданный
+// внутри другого компонента, React считает новым типом на каждой перерисовке и
+// пересоздаёт — поле теряло бы фокус после первой же введённой цифры.
+function NumField({
+  value,
+  onChange,
+  width = 'w-24',
+}: {
+  value: string
+  onChange: (v: string) => void
+  width?: string
+}) {
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder="0"
+      className={`${width} px-3 py-2 bg-slate-700 border-2 border-slate-500 rounded-lg text-center text-lg font-bold text-white placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-yellow-500 focus:bg-slate-600`}
+    />
+  )
+}
+
 export function Calculator({ onBack }: Props) {
   const [seatCount, setSeatCount] = useState<3 | 4>(3)
   const [rateId, setRateId] = useState<string>(RATES[0].id)
@@ -82,17 +109,15 @@ export function Calculator({ onBack }: Props) {
     Object.values(whists).some((v) => v.trim())
 
   const cols = seatCount === 4 ? 'grid-cols-4' : 'grid-cols-3'
-  const cell =
-    'w-full px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center text-lg focus:outline-none focus:border-yellow-500'
 
   return (
     <div className="min-h-screen p-4 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
           <div>
             <h1 className="text-3xl font-bold">Калькулятор пули</h1>
             <p className="text-slate-400 mt-1">
-              Пульку писали на бумаге — вбейте числа, посчитаем итог
+              Пульку писали на бумаге — впишите числа, посчитаем итог
             </p>
           </div>
           {onBack && (
@@ -147,90 +172,49 @@ export function Calculator({ onBack }: Props) {
             </div>
           </div>
 
-          {/* Имена */}
-          <div>
-            <div className="text-sm text-slate-300 mb-2">Имена</div>
-            <div className={`grid gap-2 ${cols}`}>
-              {seats.map((p, idx) => (
+          {/* По строке на игрока — как в бумажной пульке */}
+          <div className="space-y-3">
+            <div className="text-sm text-slate-300">
+              Впишите числа из пульки. Пустое поле — ноль.
+            </div>
+            {seats.map((p, idx) => (
+              <div key={p} className="bg-slate-900 rounded-xl p-3 space-y-3">
                 <input
-                  key={p}
                   type="text"
                   value={names[p]}
                   onChange={(e) => setNames({ ...names, [p]: e.target.value })}
                   placeholder={`Игрок ${idx + 1}`}
-                  className={cell}
+                  className="w-full px-3 py-2 bg-slate-700 border-2 border-slate-500 rounded-lg text-lg font-bold text-white placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:border-yellow-500 focus:bg-slate-600"
                 />
-              ))}
-            </div>
-          </div>
-
-          {/* Пуля и гора */}
-          <div className="grid md:grid-cols-2 gap-5">
-            <div>
-              <div className="text-sm text-slate-300 mb-2">Пуля</div>
-              <div className={`grid gap-2 ${cols}`}>
-                {seats.map((p) => (
-                  <input
-                    key={p}
-                    type="text"
-                    inputMode="numeric"
-                    value={pool[p]}
-                    onChange={(e) => setPool({ ...pool, [p]: e.target.value })}
-                    placeholder="0"
-                    className={cell}
-                  />
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm text-slate-300 mb-2">Гора</div>
-              <div className={`grid gap-2 ${cols}`}>
-                {seats.map((p) => (
-                  <input
-                    key={p}
-                    type="text"
-                    inputMode="numeric"
-                    value={mount[p]}
-                    onChange={(e) => setMount({ ...mount, [p]: e.target.value })}
-                    placeholder="0"
-                    className={cell}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Висты */}
-          <div>
-            <div className="text-sm text-slate-300 mb-2">
-              Висты <span className="text-slate-500">— сколько записал на каждого соперника</span>
-            </div>
-            <div className="space-y-2">
-              {seats.map((from, i) => (
-                <div key={from} className="flex items-center gap-2 flex-wrap">
-                  <div className="w-24 shrink-0 font-semibold truncate">{nameOf(from, i)}</div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <label className="flex items-center gap-2">
+                    <span className="text-sm text-slate-400">Пуля</span>
+                    <NumField value={pool[p]} onChange={(v) => setPool({ ...pool, [p]: v })} />
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <span className="text-sm text-slate-400">Гора</span>
+                    <NumField value={mount[p]} onChange={(v) => setMount({ ...mount, [p]: v })} />
+                  </label>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm text-slate-400">Висты на</span>
                   {seats
-                    .filter((to) => to !== from)
+                    .filter((to) => to !== p)
                     .map((to) => (
-                      <div key={to} className="flex items-center gap-1">
-                        <span className="text-xs text-slate-500">
-                          на {nameOf(to, seats.indexOf(to))}
+                      <label key={to} className="flex items-center gap-2">
+                        <span className="text-sm text-slate-300">
+                          {nameOf(to, seats.indexOf(to))}
                         </span>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={whists[whistKey(from, to)] ?? ''}
-                          onChange={(e) =>
-                            setWhists({ ...whists, [whistKey(from, to)]: e.target.value })
-                          }
-                          placeholder="0"
-                          className="w-20 px-2 py-2 bg-slate-900 border border-slate-700 rounded-lg text-center focus:outline-none focus:border-yellow-500"
+                        <NumField
+                          value={whists[whistKey(p, to)] ?? ''}
+                          onChange={(v) => setWhists({ ...whists, [whistKey(p, to)]: v })}
+                          width="w-20"
                         />
-                      </div>
+                      </label>
                     ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
 
