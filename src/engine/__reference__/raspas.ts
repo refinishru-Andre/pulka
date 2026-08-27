@@ -79,7 +79,11 @@ export function updateEightCounter(
 ): Record<PlayerId, number> {
   // Если мы только-только вошли в 8-мерные — обнуляем счётчик и ставим 1 для входящей руки
   if (state.raspasState !== 'eightRaspas' && newRaspasState === 'eightRaspas') {
-    return { A: 0, B: 0, C: 0, [oldFirstHand]: 1 } as Record<PlayerId, number>
+    // Второе согласованное отступление (27.08.2026): счётчик круга начинается
+    // пустым. Сдача, которая ПРИВЕЛА на восьмерные, к режиму не относится —
+    // раньше её первой руке ставили единицу, и круг мог замкнуться при том, что
+    // человек на восьмерных первой рукой не сидел.
+    return { A: 0, B: 0, C: 0 } as Record<PlayerId, number>
   }
   // Если мы вышли из 8-мерных — обнуляем
   if (state.raspasState === 'eightRaspas' && newRaspasState !== 'eightRaspas') {

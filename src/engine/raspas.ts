@@ -100,9 +100,15 @@ export function updateEightCounter(
   newRaspasState: RaspasState,
   oldFirstHand: PlayerId,
 ): Record<PlayerId, number> {
-  // Если мы только-только вошли в 8-мерные — обнуляем счётчик и ставим 1 для входящей руки
+  // Только что вошли в 8-мерные — счётчик пустой.
+  //
+  // Сдачу, которая ПРИВЕЛА на восьмерные, засчитывать нельзя: она игралась ещё
+  // по прежней цене и к режиму не относится. Раньше её первой руке ставили
+  // единицу, и круг мог замкнуться при том, что человек на восьмерных первой
+  // рукой так и не сидел. В партии 26.08.2026 так и вышло: круг закрылся, хотя
+  // Олег своё на восьмерных не отсидел.
   if (state.raspasState !== 'eightRaspas' && newRaspasState === 'eightRaspas') {
-    return { ...zeroScores(), [oldFirstHand]: 1 }
+    return zeroScores()
   }
   // Если мы вышли из 8-мерных — обнуляем
   if (state.raspasState === 'eightRaspas' && newRaspasState !== 'eightRaspas') {

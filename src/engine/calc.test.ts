@@ -688,8 +688,10 @@ describe('8-мерные распасы: счётчик и полный круг
     const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 3, tricks: { A: 4, B: 3, C: 3, D: 0 } }
     const newState = nextRaspasState(state, deal)
     expect(newState).toBe('eightRaspas')
+    // Счётчик круга начинается ПУСТЫМ: сдача, которая привела на восьмерные,
+    // игралась ещё по прежней цене и в режим не входит.
     const counter = updateEightCounter(state, newState, 'A')
-    expect(counter).toEqual({ A: 1, B: 0, C: 0, D: 0 })
+    expect(counter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
     expect(isEightRaspasFullCircle(counter)).toBe(false)
   })
 
