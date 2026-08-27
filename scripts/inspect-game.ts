@@ -199,8 +199,10 @@ function report(c: CloudGame, from: number, to: number) {
       const handMoved = before.firstHand !== next.firstHand
       console.log(`── Сдача ${n} ──────────────────────────────`)
       console.log(`   ${describeDeal(deal, names)}`)
+      const stored = (deal as { firstHand?: PlayerId }).firstHand
+      const mismatch = stored && stored !== before.firstHand ? `  ⚠ В ЗАПИСИ БЫЛО: ${names[stored]}` : ''
       console.log(
-        `   состояние ДО:    ${RASPAS_LABEL[before.raspas]} (мин ${minBidFor(before.raspas)}) · первая рука ${names[before.firstHand]}`,
+        `   состояние ДО:    ${RASPAS_LABEL[before.raspas]} (мин ${minBidFor(before.raspas)}) · первая рука ${names[before.firstHand]}${mismatch}`,
       )
       console.log(
         `   состояние ПОСЛЕ: ${RASPAS_LABEL[next.raspasState]} (мин ${minBidFor(next.raspasState)}) · первая рука ${names[next.firstHand]} ${handMoved ? '← ПЕРЕШЛА' : '← ОСТАЛАСЬ'}`,

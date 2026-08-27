@@ -1057,3 +1057,122 @@ describe('Конвенции партии', () => {
     expect(FSPR_RULES.poolLimit).toBeNull() // играют на время
   })
 })
+
+// ============================================================================
+// СТОРОЖ: восьмерные распасы целиком, ровно как это было у Андрея за столом
+//
+// Партия 26.08.2026, сдачи 33-38. Две ошибки, которые тут заперты:
+//   1) восьмерные начинались на сдачу позже — со ТРЕТЬЕГО распаса вместо второго,
+//      из-за чего уход без трёх передавал руку, хотя должен был оставить;
+//   2) круг засчитывал сдачу, которая только ПРИВЕЛА на восьмерные, и мог
+//      замкнуться при том, что человек первой рукой на них не сидел.
+// ============================================================================
+
+describe('Восьмерные распасы: сценарий из живой партии', () => {
+  const raspas = (firstHand: PlayerId, level: 1 | 2 | 3): Deal => ({
+    type: 'raspas',
+    dealer: prevClockwise(firstHand),
+    firstHand,
+    level,
+    tricks: { A: 4, B: 3, C: 3, D: 0 },
+  })
+
+  it('второй распас открывает восьмерные, уход без трёх оставляет руку, круг ждёт всех', () => {
+    let s: GameState = initState()
+    expect(s.firstHand).toBe('A')
+
+    // Первый распас: минимум становится 7
+    s = applyDeal(s, raspas('A', 1))
+    expect(s.raspasState).toBe('afterFirst')
+    expect(minBidFor(s.raspasState)).toBe(7)
+    expect(s.firstHand).toBe('B')
+
+    // Второй распас: минимум 8 — значит УЖЕ восьмерные, а не «после 2-го»
+    s = applyDeal(s, raspas('B', 2))
+    expect(s.raspasState).toBe('eightRaspas')
+    expect(minBidFor(s.raspasState)).toBe(8)
+    expect(s.firstHand).toBe('C')
+    // Счётчик круга пуст: сдача, которая привела сюда, не в счёт
+    expect(s.eightRaspasCounter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
+
+    // Кто-то заказал восьмерную и ушёл без трёх — РУКА ОСТАЁТСЯ
+    s = applyDeal(s, {
+      type: 'giveup',
+      dealer: prevClockwise('C'),
+      firstHand: 'C',
+      player: 'B',
+      contract: { kind: 'game', level: 8 },
+    })
+    expect(s.firstHand).toBe('C')
+    expect(s.raspasState).toBe('eightRaspas')
+    expect(s.eightRaspasCounter.C).toBe(1)
+
+    // Дальше распасы — рука идёт по кругу
+    s = applyDeal(s, raspas('C', 3))
+    expect(s.firstHand).toBe('A')
+    expect(s.raspasState).toBe('eightRaspas')
+
+    s = applyDeal(s, raspas('A', 3))
+    expect(s.firstHand).toBe('B')
+    // A отсидел, C отсидел, B ещё нет — круг НЕ замкнут
+    expect(s.raspasState).toBe('eightRaspas')
+
+    // И только когда сел последний — восьмерные кончаются
+    s = applyDeal(s, raspas('B', 3))
+    expect(s.raspasState).toBe('normal')
+    expect(minBidFor(s.raspasState)).toBe(6)
+  })
+
+  it('несыгранная восьмерная тоже оставляет руку, а сыгранная гасит распасы сразу', () => {
+    let s: GameState = initState()
+    s = applyDeal(s, raspas('A', 1))
+    s = applyDeal(s, raspas('B', 2))
+    expect(s.raspasState).toBe('eightRaspas')
+    const hand = s.firstHand
+
+    // Заказал восьмерную и сел — рука остаётся
+    s = applyDeal(s, {
+      type: 'game',
+      dealer: prevClockwise(hand),
+      firstHand: hand,
+      player: 'A',
+      contract: { kind: 'game', level: 8 },
+      playerTricks: 6,
+      vistersTricks: { B: 2, C: 2 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+    })
+    expect(s.firstHand).toBe(hand)
+    expect(s.raspasState).toBe('eightRaspas')
+
+    // А сыграл — восьмерные кончились, круг досиживать не нужно
+    s = applyDeal(s, {
+      type: 'game',
+      dealer: prevClockwise(hand),
+      firstHand: hand,
+      player: 'A',
+      contract: { kind: 'game', level: 8 },
+      playerTricks: 8,
+      vistersTricks: { B: 1, C: 1 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+    })
+    expect(s.raspasState).toBe('normal')
+    expect(minBidFor(s.raspasState)).toBe(6)
+  })
+
+  it('пойманный мизер на восьмерных тоже оставляет руку', () => {
+    let s: GameState = initState()
+    s = applyDeal(s, raspas('A', 1))
+    s = applyDeal(s, raspas('B', 2))
+    const hand = s.firstHand
+    s = applyDeal(s, {
+      type: 'misere',
+      dealer: prevClockwise(hand),
+      firstHand: hand,
+      player: 'A',
+      blind: false,
+      playerTricks: 2,
+    })
+    expect(s.firstHand).toBe(hand)
+    expect(s.raspasState).toBe('eightRaspas')
+  })
+})
