@@ -7,7 +7,7 @@
 // КАЖДОЙ СДАЧИ, а когда пулька уже написана, итоговая арифметика одна для всех
 // школ. Единственное, что нужно знать, — курс перевода в висты.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { GameState, PlayerId, Seats } from '../engine/types'
 import { ALL_PLAYERS, zeroScores, zeroWhists } from '../engine/types'
 import { settle } from '../engine'
@@ -56,14 +56,44 @@ function NumField({
   )
 }
 
+// Введённое храним на устройстве: закрыл страницу случайно — числа не пропали.
+const STORE_KEY = 'pulka-calc-v1'
+
+interface Saved {
+  seatCount: 3 | 4
+  rateId: string
+  names: Record<PlayerId, string>
+  pool: Record<PlayerId, string>
+  mount: Record<PlayerId, string>
+  whists: Record<string, string>
+}
+
+function loadSaved(): Partial<Saved> {
+  try {
+    return JSON.parse(localStorage.getItem(STORE_KEY) ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
 export function Calculator({ onBack }: Props) {
-  const [seatCount, setSeatCount] = useState<3 | 4>(3)
-  const [rateId, setRateId] = useState<string>(RATES[0].id)
-  const [names, setNames] = useState<Record<PlayerId, string>>({ A: '', B: '', C: '', D: '' })
-  const [pool, setPool] = useState<Record<PlayerId, string>>({ A: '', B: '', C: '', D: '' })
-  const [mount, setMount] = useState<Record<PlayerId, string>>({ A: '', B: '', C: '', D: '' })
+  const saved = useMemo(loadSaved, [])
+  const [seatCount, setSeatCount] = useState<3 | 4>(saved.seatCount ?? 3)
+  const [rateId, setRateId] = useState<string>(saved.rateId ?? RATES[0].id)
+  const empty = { A: '', B: '', C: '', D: '' }
+  const [names, setNames] = useState<Record<PlayerId, string>>(saved.names ?? empty)
+  const [pool, setPool] = useState<Record<PlayerId, string>>(saved.pool ?? empty)
+  const [mount, setMount] = useState<Record<PlayerId, string>>(saved.mount ?? empty)
   // whists[from][to] — сколько from записал на to
-  const [whists, setWhists] = useState<Record<string, string>>({})
+  const [whists, setWhists] = useState<Record<string, string>>(saved.whists ?? {})
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    localStorage.setItem(
+      STORE_KEY,
+      JSON.stringify({ seatCount, rateId, names, pool, mount, whists }),
+    )
+  }, [seatCount, rateId, names, pool, mount, whists])
 
   const seats = useMemo<Seats>(() => ALL_PLAYERS.slice(0, seatCount), [seatCount])
   const rate = RATES.find((r) => r.id === rateId) ?? RATES[0]
@@ -104,6 +134,44 @@ export function Calculator({ onBack }: Props) {
   }, [seats, pool, mount, whists, names, rate])
 
   const result = settle(state)
+
+  // Итог одним куском текста — чтобы отдать людям за соседним столом
+  const resultText = (): string => {
+    const lines: string[] = ['Пулька — итог']
+    seats.forEach((p, i) => {
+      lines.push(
+        `${nameOf(p, i)}: пуля ${num(pool[p])}, гора ${num(mount[p])}, итог ${
+          result.net[p] > 0 ? '+' : ''
+        }${result.net[p]}`,
+      )
+    })
+    lines.push('')
+    if (result.pairwise.length === 0) lines.push('Никто никому ничего не должен')
+    else
+      result.pairwise.forEach((d) =>
+        lines.push(`${state.players[d.from]} должен ${state.players[d.to]} ${d.amount} вистов`),
+      )
+    lines.push('')
+    lines.push(`Курс: ${rate.name} (${rate.hint})`)
+    return lines.join(String.fromCharCode(10))
+  }
+
+  const copyResult = async () => {
+    try {
+      await navigator.clipboard.writeText(resultText())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  const clearAll = () => {
+    setNames(empty)
+    setPool(empty)
+    setMount(empty)
+    setWhists({})
+  }
   const anyInput =
     seats.some((s) => pool[s].trim() || mount[s].trim()) ||
     Object.values(whists).some((v) => v.trim())
@@ -249,7 +317,27 @@ export function Calculator({ onBack }: Props) {
 
         {/* Итог */}
         <div className="bg-slate-800 rounded-2xl p-5 mt-5">
-          <h2 className="text-xl font-bold mb-3">Итог</h2>
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <h2 className="text-xl font-bold">Итог</h2>
+            {anyInput && (
+              <div className="flex gap-2">
+                <button
+                  onClick={copyResult}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg font-semibold"
+                  title="Скопировать итог текстом — можно отправить в переписке"
+                >
+                  {copied ? '✓ Скопировано' : '📋 Скопировать итог'}
+                </button>
+                <button
+                  onClick={clearAll}
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold"
+                  title="Очистить все поля"
+                >
+                  Очистить
+                </button>
+              </div>
+            )}
+          </div>
           {!anyInput ? (
             <div className="text-slate-500">Введите числа — итог посчитается сам.</div>
           ) : (
