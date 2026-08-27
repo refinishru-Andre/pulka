@@ -128,9 +128,18 @@ export function Table({ onBack }: Props = {}) {
     c.level === 6 && c.suit === 'S' ? '6♠ (Сталинград)' : String(c.level)
 
   // Расшифровка последней сдачи текстом
+  // Первая рука САМОЙ последней сдачи — состояние перед ней.
+  // Это не то же самое, что подсвеченный на экране игрок: тот уже первая рука
+  // СЛЕДУЮЩЕЙ сдачи. Раньше обе назывались просто «первая рука», и их путали.
+  const handBeforeLastDeal: PlayerId | null =
+    viewed.deals.length > 0 ? replayTo(game, viewed.deals.length - 1).firstHand : null
+
   const explainLastDeal = (): string[] => {
     if (!lastDeal || !lastDelta) return []
     const lines: string[] = []
+    if (handBeforeLastDeal) {
+      lines.push(`Сдача ${viewed.deals.length}. Первая рука была: ${game.players[handBeforeLastDeal]}.`)
+    }
     if (lastDeal.type === 'game' && lastDeal.contract.kind === 'game') {
       const player = game.players[lastDeal.player]
       lines.push(
@@ -184,6 +193,14 @@ export function Table({ onBack }: Props = {}) {
       if (whistsOut.length > 0) changes.push(`висты ${whistsOut.join(', ')}`)
       if (changes.length > 0) lines.push(`${game.players[p]}: ${changes.join('; ')}`)
     })
+    lines.push('')
+    if (handBeforeLastDeal) {
+      lines.push(
+        handBeforeLastDeal === viewed.firstHand
+          ? `Дальше первая рука ОСТАЁТСЯ у ${game.players[viewed.firstHand]}.`
+          : `Дальше первая рука переходит: ${game.players[handBeforeLastDeal]} → ${game.players[viewed.firstHand]}.`,
+      )
+    }
     return lines
   }
   const explanation = explainLastDeal()
@@ -425,6 +442,19 @@ export function Table({ onBack }: Props = {}) {
           </span>
         )}
       </div>
+
+      {/* Кто ходит в СЛЕДУЮЩЕЙ сдаче. Подписи на карточках относятся именно к
+          ней, а не к только что записанной — на этом легко обмануться. */}
+      {!isFinished && (
+        <div className="mb-3 px-5 py-2 bg-slate-800 rounded-lg text-center text-base">
+          <span className="text-slate-400">
+            {viewingHistory ? 'Следующей была сдача' : 'Следующая сдача'} №{viewed.deals.length + 1}:{' '}
+          </span>
+          <span className="font-semibold">сдаёт {game.players[dealer]}</span>
+          <span className="text-slate-400"> · первая рука </span>
+          <span className="font-bold text-yellow-500">{game.players[viewed.firstHand]}</span>
+        </div>
+      )}
 
       {/* Основной блок: по колонке на каждого за столом */}
       <div className={`grid ${seats.length === 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'} gap-5 mb-5`}>
