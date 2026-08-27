@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest'
 import { calcDeal } from './calc'
 import { applyDeal, recomputeState, freezeGame } from './index'
+import { prevClockwise, minBidFor } from './raspas'
 import { settle, calcNet } from './settle'
 import {
   rulesOf, ladderAt, halfVistTricks, HOME_RULES, FSPR_RULES,
@@ -490,10 +491,30 @@ describe('nextRaspasState + nextFirstHand', () => {
     expect(nextFirstHand(state, deal, newState)).toBe('B')
   })
 
-  it('2-й распас в afterFirst → afterSecond', () => {
+  it('2-й распас сразу выводит на 8-мерные: минимум стал 8 — значит уже они', () => {
+    // Раньше между ними была лишняя ступень «после 2-го распаса» с тем же
+    // минимумом 8 и той же ценой 6. Отличалась только тем, что в ней не работало
+    // правило «рука остаётся» — из-за чего 26.08.2026 на 35-й сдаче рука ушла.
     const state: GameState = { ...initState(), raspasState: 'afterFirst' }
     const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 2, tricks: { A: 4, B: 3, C: 3, D: 0 } }
-    expect(nextRaspasState(state, deal)).toBe('afterSecond')
+    expect(nextRaspasState(state, deal)).toBe('eightRaspas')
+    // И минимум, и цена взятки при этом те же, что были в старой ступени
+    expect(minBidFor('eightRaspas')).toBe(8)
+  })
+
+  it('уход без трёх на 8-мерных оставляет руку на месте', () => {
+    // Ровно тот случай: Олег заказал восьмерную и ушёл без трёх, рука должна
+    // остаться. Проверяем со ВТОРОГО распаса, а не с третьего.
+    let s: GameState = { ...initState(), raspasState: 'afterFirst' }
+    s = applyDeal(s, { type: 'raspas', dealer: 'C', firstHand: 'A', level: 2, tricks: { A: 4, B: 3, C: 3, D: 0 } })
+    expect(s.raspasState).toBe('eightRaspas')
+    const handBefore = s.firstHand
+    s = applyDeal(s, {
+      type: 'giveup', dealer: prevClockwise(handBefore), firstHand: handBefore,
+      player: 'B', contract: { kind: 'game', level: 8 },
+    })
+    expect(s.firstHand).toBe(handBefore) // осталась
+    expect(s.raspasState).toBe('eightRaspas')
   })
 
   it('3-й распас в afterSecond → eightRaspas', () => {

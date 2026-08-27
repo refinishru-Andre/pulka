@@ -45,7 +45,6 @@ export function nextRaspasState(state: GameState, deal: Deal): RaspasState {
   // Распас увеличивает уровень
   if (deal.type === 'raspas') {
     if (state.raspasState === 'normal') return 'afterFirst'
-    if (state.raspasState === 'afterFirst') return 'afterSecond'
     if (state.raspasState === 'afterSecond') return 'eightRaspas'
     return 'eightRaspas' // остаёмся в 8-мерных при повторном распасе
   }
