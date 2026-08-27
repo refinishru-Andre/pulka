@@ -448,12 +448,12 @@ export function Table({ onBack }: Props = {}) {
 
       {/* Кто ходит в СЛЕДУЮЩЕЙ сдаче. Подписи на карточках относятся именно к
           ней, а не к только что записанной — на этом легко обмануться. */}
-      {!isFinished && (
+      {(viewingHistory || !isFinished) && (
         <div className="mb-3 px-5 py-2 bg-slate-800 rounded-lg text-center text-base">
           <span className="text-slate-400">
             {viewingHistory
-              ? `После сдачи №${viewed.deals.length} сдавал `
-              : `Следующая сдача №${viewed.deals.length + 1}: сдаёт `}
+              ? `Смотрим сдачу №${viewed.deals.length} из ${game.deals.length}: сдавал `
+              : 'Сейчас сдаёт '}
           </span>
           <span className="font-semibold">{game.players[dealer]}</span>
           <span className="text-slate-400"> · первая рука </span>
