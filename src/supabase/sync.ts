@@ -24,6 +24,10 @@ interface CloudGame {
     // Места за столом. У партий, записанных до появления игры вчетвером,
     // поля нет — это стол на троих (см. seatsOf).
     seats?: Seats
+    // Настоящий размер пули. null = без предела (игра по времени).
+    // Колонка pool_limit в базе объявлена NOT NULL и null не принимает, поэтому
+    // истинное значение живёт здесь, а в колонку кладётся 0 как заглушка.
+    poolLimit?: number | null
     // Конвенции партии. У партий, записанных раньше, поля нет — тогда «Дом».
     rules?: Rules
     // Итог вморожен — не пересчитывать (см. recomputeState)
@@ -47,6 +51,7 @@ function toCloudState(game: GameState) {
     deals: game.deals,
     finishedManually: game.finishedManually,
     seats: game.seats,
+    poolLimit: game.poolLimit,
     rules: game.rules,
     frozenAt: game.frozenAt,
     // lastDelta не сохраняем, он вычисляется
@@ -57,7 +62,8 @@ function toCloudState(game: GameState) {
 function fromCloud(cloud: CloudGame): GameState {
   return {
     players: cloud.players as GameState['players'],
-    poolLimit: cloud.pool_limit,
+    // Из state, если он там есть: в колонке null храниться не может.
+    poolLimit: cloud.state.poolLimit !== undefined ? cloud.state.poolLimit : cloud.pool_limit,
     createdAt: new Date(cloud.created_at).getTime(),
     pool: cloud.state.pool as GameState['pool'],
     mount: cloud.state.mount as GameState['mount'],
@@ -102,7 +108,8 @@ export async function uploadGame(
     id: gameId,
     owner_id: user.id,
     players: game.players,
-    pool_limit: game.poolLimit,
+    // Колонка NOT NULL: «без предела» кладём как 0, настоящее значение — в state
+    pool_limit: game.poolLimit ?? 0,
     first_hand_start: game.deals[0]?.firstHand ?? game.firstHand,
     state: toCloudState(game),
     finished,
