@@ -1,41 +1,26 @@
 import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
 import { useSyncStatus } from '../store/sync-status'
-import { settle, minBidFor, applyDeal } from '../engine'
-import { PLAYERS } from '../engine/types'
+import {
+  settle,
+  minBidFor,
+  applyDeal,
+  emptyStateFrom,
+  prevClockwise,
+  isGameFinished,
+  rulesOf,
+  raspasStateLabel,
+  RASPAS_LEVEL_NAME,
+  gameResultText,
+} from '../engine'
+import { zeroWhists, seatsOf } from '../engine/types'
 import type { PlayerId, GameState } from '../engine/types'
 import { DealForm } from './DealForm'
 
-function prevClockwise(p: PlayerId): PlayerId {
-  const idx = PLAYERS.indexOf(p)
-  return PLAYERS[(idx + PLAYERS.length - 1) % PLAYERS.length]
-}
-
 // Вычислить состояние на момент N-й сдачи (для просмотра истории)
 function replayTo(game: GameState, upTo: number): GameState {
-  const initial: GameState = {
-    ...game,
-    pool: { A: 0, B: 0, C: 0 },
-    mount: { A: 0, B: 0, C: 0 },
-    whists: {
-      A: { A: 0, B: 0, C: 0 },
-      B: { A: 0, B: 0, C: 0 },
-      C: { A: 0, B: 0, C: 0 },
-    },
-    firstHand: game.deals[0]?.firstHand ?? game.firstHand,
-    raspasState: 'normal',
-    eightRaspasCounter: { A: 0, B: 0, C: 0 },
-    deals: [],
-    lastDelta: undefined,
-  }
+  const initial = emptyStateFrom(game, game.deals[0]?.firstHand ?? game.firstHand)
   return game.deals.slice(0, upTo).reduce(applyDeal, initial)
-}
-
-const RASPAS_LABEL: Record<string, string> = {
-  normal: 'Обычная игра · мин 6',
-  afterFirst: 'После 1-го распаса · мин 7',
-  afterSecond: 'После 2-го распаса · мин 8',
-  eightRaspas: '8-мерные распасы · мин 8',
 }
 
 // Значок в шапке: доехала ли последняя сдача до облака.
@@ -69,17 +54,24 @@ export function Table({ onBack }: Props = {}) {
   const viewNext = useGameStore((s) => s.viewNext)
   const viewReset = useGameStore((s) => s.viewReset)
   const deleteLastDeal = useGameStore((s) => s.deleteLastDeal)
+  const deleteDealAt = useGameStore((s) => s.deleteDealAt)
   const resetGame = useGameStore((s) => s.resetGame)
   const finishGame = useGameStore((s) => s.finishGame)
   const syncState = useSyncStatus((s) => s.state)
   const [dealFormOpen, setDealFormOpen] = useState(false)
+  // Правка сдачи из истории: её номер. null — обычная запись новой сдачи.
+  const [editIndex, setEditIndex] = useState<number | null>(null)
+  const [confirmDeleteDeal, setConfirmDeleteDeal] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // Партия автозавершена если все пули закрыты
-  const allPoolsClosed = PLAYERS.every((p) => game.pool[p] >= game.poolLimit)
-  const isFinished = allPoolsClosed || game.finishedManually === true
+  // Кто за столом: трое или четверо. Читаем из партии, а не из константы.
+  const seats = seatsOf(game)
+  // Партия окончена: все пули закрыты либо посчитали вручную.
+  // Без предела пуля не закрывается — только кнопкой «Рассчитать».
+  const isFinished = isGameFinished(game) || game.finishedManually === true
 
   // Просматриваемое состояние (для истории)
   const viewingHistory = viewIndex !== null
@@ -88,8 +80,17 @@ export function Table({ onBack }: Props = {}) {
     return replayTo(game, viewIndex!)
   }, [game, viewIndex, viewingHistory])
 
-  // Сдающий = предыдущий по часовой от firstHand ВИДИМОГО состояния
-  const dealer = prevClockwise(viewed.firstHand)
+  // Первая рука ТОЙ сдачи, которую смотрим. Состояние `viewed` — это уже ПОСЛЕ
+  // неё, то есть расстановка для следующей. Пока смотришь прошлое, показывать
+  // роли будущего нельзя: получалось «Олег сдаёт» и тут же «первая рука был
+  // Олег» — оба верны, но про разные сдачи.
+  const handBeforeLastDeal: PlayerId | null =
+    viewed.deals.length > 0 ? replayTo(game, viewed.deals.length - 1).firstHand : null
+
+  // Чьи роли рисуем на карточках
+  const roleFirstHand =
+    viewingHistory && handBeforeLastDeal ? handBeforeLastDeal : viewed.firstHand
+  const dealer = prevClockwise(roleFirstHand, seats)
 
   const settlement = settle(viewed)
   const minBid = minBidFor(viewed.raspasState)
@@ -97,11 +98,7 @@ export function Table({ onBack }: Props = {}) {
   const lastDeal = viewed.deals[viewed.deals.length - 1]
   const lastDelta = viewed.lastDelta ?? null
   // whists суммируем по (from,to) — может быть несколько записей (например висты + консоляция)
-  const lastWhistDelta: Record<PlayerId, Record<PlayerId, number>> = {
-    A: { A: 0, B: 0, C: 0 },
-    B: { A: 0, B: 0, C: 0 },
-    C: { A: 0, B: 0, C: 0 },
-  }
+  const lastWhistDelta: Record<PlayerId, Record<PlayerId, number>> = zeroWhists()
   if (lastDelta) {
     lastDelta.whists.forEach((w) => {
       lastWhistDelta[w.from][w.to] += w.amount
@@ -110,12 +107,12 @@ export function Table({ onBack }: Props = {}) {
   const playerHasChanges = (p: PlayerId): boolean => {
     if (!lastDelta) return false
     if (lastDelta.pool[p] !== 0 || lastDelta.mount[p] !== 0) return true
-    if (PLAYERS.some((o) => lastWhistDelta[p][o] !== 0 || lastWhistDelta[o][p] !== 0)) return true
+    if (seats.some((o) => lastWhistDelta[p][o] !== 0 || lastWhistDelta[o][p] !== 0)) return true
     return false
   }
 
   const playerColor = (p: PlayerId) => {
-    if (p === viewed.firstHand) return 'ring-4 ring-yellow-500'
+    if (p === roleFirstHand) return 'ring-4 ring-yellow-500'
     return ''
   }
 
@@ -143,12 +140,15 @@ export function Table({ onBack }: Props = {}) {
   const explainLastDeal = (): string[] => {
     if (!lastDeal || !lastDelta) return []
     const lines: string[] = []
+    if (handBeforeLastDeal) {
+      lines.push(`Сдача ${viewed.deals.length}. Первая рука была: ${game.players[handBeforeLastDeal]}.`)
+    }
     if (lastDeal.type === 'game' && lastDeal.contract.kind === 'game') {
       const player = game.players[lastDeal.player]
       lines.push(
         `${player} играл ${contractLabel(lastDeal.contract)}, взял ${lastDeal.playerTricks}.`,
       )
-      const vs = PLAYERS.filter((p) => p !== lastDeal.player)
+      const vs = seats.filter((p) => p !== lastDeal.player && lastDeal.vistDecisions[p] !== undefined)
       vs.forEach((v) => {
         const decision = lastDeal.vistDecisions[v]
         const t = lastDeal.vistersTricks[v]
@@ -162,25 +162,48 @@ export function Table({ onBack }: Props = {}) {
         `${player} мизер${lastDeal.blind ? ' б/п' : ''}, ${lastDeal.playerTricks === 0 ? 'сыграл' : `поймали ${lastDeal.playerTricks}`}.`,
       )
     } else if (lastDeal.type === 'raspas') {
-      const levelName = lastDeal.level === 1 ? '1-й' : lastDeal.level === 2 ? '2-й' : '8-мерный'
-      lines.push(`Распас ${levelName}: ` + PLAYERS.map((p) => `${game.players[p]}=${lastDeal.tricks[p]}`).join(', '))
+      const name = RASPAS_LEVEL_NAME[lastDeal.level]
+      lines.push(
+        `Распас ${name}: ` +
+          seats.map((p) => `${game.players[p]}=${lastDeal.tricks[p] ?? 0}`).join(', '),
+      )
     } else if (lastDeal.type === 'giveup' && lastDeal.contract.kind === 'game') {
       lines.push(
         `${game.players[lastDeal.player]} ушёл без 3 на ${contractLabel(lastDeal.contract)}.`,
       )
+    } else if (lastDeal.type === 'adjust') {
+      const where =
+        lastDeal.target === 'mount'
+          ? 'гора'
+          : lastDeal.target === 'pool'
+            ? 'пуля'
+            : `висты на ${game.players[lastDeal.to!]}`
+      const sign = lastDeal.amount > 0 ? '+' : ''
+      lines.push(
+        `Правка руками: ${game.players[lastDeal.player]}, ${where} ${sign}${lastDeal.amount}.`,
+      )
+      lines.push(`Причина: ${lastDeal.note}`)
     }
     // Расчёт
     lines.push('') // разделитель
-    PLAYERS.forEach((p) => {
+    seats.forEach((p) => {
       const changes: string[] = []
       if (lastDelta.pool[p] !== 0) changes.push(`пуля ${lastDelta.pool[p] > 0 ? '+' : ''}${lastDelta.pool[p]}`)
       if (lastDelta.mount[p] !== 0) changes.push(`гора ${lastDelta.mount[p] > 0 ? '+' : ''}${lastDelta.mount[p]}`)
-      const whistsOut = PLAYERS.filter((o) => o !== p)
+      const whistsOut = seats.filter((o) => o !== p)
         .map((o) => (lastWhistDelta[p][o] !== 0 ? `+${lastWhistDelta[p][o]} на ${game.players[o]}` : null))
         .filter(Boolean)
       if (whistsOut.length > 0) changes.push(`висты ${whistsOut.join(', ')}`)
       if (changes.length > 0) lines.push(`${game.players[p]}: ${changes.join('; ')}`)
     })
+    lines.push('')
+    if (handBeforeLastDeal) {
+      lines.push(
+        handBeforeLastDeal === viewed.firstHand
+          ? `Дальше первая рука ОСТАЁТСЯ у ${game.players[viewed.firstHand]}.`
+          : `Дальше первая рука переходит: ${game.players[handBeforeLastDeal]} → ${game.players[viewed.firstHand]}.`,
+      )
+    }
     return lines
   }
   const explanation = explainLastDeal()
@@ -192,7 +215,7 @@ export function Table({ onBack }: Props = {}) {
         <div>
           <h1 className="text-3xl font-bold">Людочка</h1>
           <div className="text-base text-slate-400 flex items-center gap-3 flex-wrap mt-1">
-            <span>Пуля до {game.poolLimit}</span>
+            <span>{game.poolLimit === null ? 'Пуля без предела' : `Пуля до ${game.poolLimit}`}</span>
             <span>·</span>
             <span>
               сдач: {viewingHistory ? `${viewIndex}/${game.deals.length}` : game.deals.length}
@@ -204,11 +227,15 @@ export function Table({ onBack }: Props = {}) {
             )}
             <span>·</span>
             {(() => {
-              const sumPool = PLAYERS.reduce((s, p) => s + viewed.pool[p], 0)
-              const inGame = viewed.poolLimit * PLAYERS.length - sumPool
               if (isFinished && !viewingHistory) {
                 return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
               }
+              // Без предела пуля не кончается: играют по времени, считают по кнопке
+              if (viewed.poolLimit === null) {
+                return <span className="text-slate-400">играем по времени</span>
+              }
+              const sumPool = seats.reduce((s, p) => s + viewed.pool[p], 0)
+              const inGame = viewed.poolLimit * seats.length - sumPool
               if (inGame <= 0 && !viewingHistory) {
                 return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
               }
@@ -233,7 +260,7 @@ export function Table({ onBack }: Props = {}) {
           )}
           <button
             onClick={viewPrev}
-            disabled={viewIndex === 0 || game.deals.length === 0}
+            disabled={viewIndex === 1 || game.deals.length === 0}
             className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
             title="Посмотреть предыдущую сдачу"
           >
@@ -241,7 +268,7 @@ export function Table({ onBack }: Props = {}) {
           </button>
           <button
             onClick={viewNext}
-            disabled={!viewingHistory}
+            disabled={!viewingHistory || viewIndex === game.deals.length}
             className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
             title="Посмотреть следующую сдачу"
           >
@@ -255,6 +282,50 @@ export function Table({ onBack }: Props = {}) {
             >
               ⤓ К текущей
             </button>
+          )}
+          {/* Правка любой сдачи. Ошибиться при записи легко — не тот игрок,
+              не то число взяток. Раньше поправить можно было только последнюю,
+              и ошибка тащилась до конца партии. */}
+          {viewingHistory && !isFinished && viewIndex! > 0 && (
+            <>
+              <button
+                onClick={() => {
+                  setEditIndex(viewIndex! - 1)
+                  setDealFormOpen(true)
+                }}
+                className="px-4 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-base font-semibold"
+                title="Исправить эту сдачу — партия пересчитается с неё"
+              >
+                ✏️ Исправить сдачу {viewIndex}
+              </button>
+              {confirmDeleteDeal ? (
+                <>
+                  <button
+                    onClick={() => {
+                      deleteDealAt(viewIndex! - 1)
+                      setConfirmDeleteDeal(false)
+                    }}
+                    className="px-4 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-base font-bold"
+                  >
+                    Точно удалить?
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteDeal(false)}
+                    className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+                  >
+                    Нет
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setConfirmDeleteDeal(true)}
+                  className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+                  title="Убрать эту сдачу из партии"
+                >
+                  🗑 Удалить сдачу {viewIndex}
+                </button>
+              )}
+            </>
           )}
           {!isFinished && !viewingHistory && (
             confirmDelete ? (
@@ -298,7 +369,7 @@ export function Table({ onBack }: Props = {}) {
                   }}
                   className="px-5 py-3 bg-amber-600 hover:bg-amber-500 rounded-lg text-base font-bold"
                 >
-                  Да, завершить
+                  Да, рассчитать
                 </button>
                 <button
                   onClick={() => setConfirmFinish(false)}
@@ -311,9 +382,9 @@ export function Table({ onBack }: Props = {}) {
               <button
                 onClick={() => setConfirmFinish(true)}
                 className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-                title="Пометить партию как завершённую"
+                title="Зафиксировать итог на текущий момент. Пуля закрыта или нет — неважно: считаем по последней сдаче. После расчёта партия не меняется."
               >
-                🏁 Завершить
+                🏁 Рассчитать партию
               </button>
             ))}
           {confirmReset ? (
@@ -338,8 +409,9 @@ export function Table({ onBack }: Props = {}) {
             <button
               onClick={() => setConfirmReset(true)}
               className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
+              title="Текущая партия останется незавершённой в списке — её можно открыть и доиграть позже."
             >
-              Новая игра
+              Отложить и начать новую
             </button>
           )}
         </div>
@@ -362,25 +434,44 @@ export function Table({ onBack }: Props = {}) {
       {/* Состояние распасов */}
       <div className="mb-5 px-5 py-3 bg-slate-800 rounded-lg text-center text-base">
         <span className="text-slate-400">Состояние: </span>
-        <span className="font-bold">{RASPAS_LABEL[viewed.raspasState]}</span>
+        <span className="font-bold">{raspasStateLabel(viewed.raspasState, rulesOf(viewed))}</span>
         {viewed.raspasState === 'eightRaspas' && (
           <span className="text-slate-400 ml-3">
-            · круг:{' '}
-            {PLAYERS.map((p) => `${game.players[p].slice(0, 3)}=${viewed.eightRaspasCounter[p]}`).join(', ')}
+            · кто уже сидел первой рукой:{' '}
+            {seats
+              .filter((p) => viewed.eightRaspasCounter[p] > 0)
+              .map((p) => game.players[p])
+              .join(', ') || 'ещё никто'}
           </span>
         )}
       </div>
 
-      {/* Основной блок: 3 колонки игроков */}
-      <div className="grid grid-cols-3 gap-5 mb-5">
-        {PLAYERS.map((p) => {
-          const closed = viewed.pool[p] >= viewed.poolLimit
-          const progress = Math.min(100, (viewed.pool[p] / viewed.poolLimit) * 100)
+      {/* Кто ходит в СЛЕДУЮЩЕЙ сдаче. Подписи на карточках относятся именно к
+          ней, а не к только что записанной — на этом легко обмануться. */}
+      {(viewingHistory || !isFinished) && (
+        <div className="mb-3 px-5 py-2 bg-slate-800 rounded-lg text-center text-base">
+          <span className="text-slate-400">
+            {viewingHistory
+              ? `Смотрим сдачу №${viewed.deals.length} из ${game.deals.length}: сдавал `
+              : 'Сейчас сдаёт '}
+          </span>
+          <span className="font-semibold">{game.players[dealer]}</span>
+          <span className="text-slate-400"> · первая рука </span>
+          <span className="font-bold text-yellow-500">{game.players[roleFirstHand]}</span>
+        </div>
+      )}
+
+      {/* Основной блок: по колонке на каждого за столом */}
+      <div className={`grid ${seats.length === 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'} gap-5 mb-5`}>
+        {seats.map((p) => {
+          const limit = viewed.poolLimit
+          const closed = limit !== null && viewed.pool[p] >= limit
+          const progress = limit === null ? 0 : Math.min(100, (viewed.pool[p] / limit) * 100)
           const changed = playerHasChanges(p)
           const poolD = lastDelta?.pool[p] ?? 0
           const mountD = lastDelta?.mount[p] ?? 0
-          const changedClass = changed && p !== viewed.firstHand ? 'ring-2 ring-blue-500/50' : ''
-          const isFirstHand = p === viewed.firstHand
+          const changedClass = changed && p !== roleFirstHand ? 'ring-2 ring-blue-500/50' : ''
+          const isFirstHand = p === roleFirstHand
           const isDealer = p === dealer
           // Третий игрок — вторая рука. Полосу рисуем всем, чтобы карточки были
           // одной высоты, а роль читалась с другого конца стола.
@@ -448,7 +539,7 @@ export function Table({ onBack }: Props = {}) {
 
               <div className="border-t border-slate-700 mt-4 pt-3">
                 <div className="text-sm text-slate-500 mb-2">Висты на кого написал</div>
-                {PLAYERS.filter((o) => o !== p).map((o) => (
+                {seats.filter((o) => o !== p).map((o) => (
                   <div key={o} className="flex justify-between items-baseline text-lg mb-1">
                     <span className="text-slate-400">→ {game.players[o]}</span>
                     <span className="text-whist font-semibold">
@@ -481,7 +572,25 @@ export function Table({ onBack }: Props = {}) {
       {/* Попарные долги */}
       {settlement.pairwise.length > 0 && (
         <div className="mb-6 bg-slate-800 rounded-2xl p-5">
-          <div className="text-base text-slate-400 mb-3 font-semibold">Кто кому должен (висты)</div>
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <div className="text-base text-slate-400 font-semibold">Кто кому должен (висты)</div>
+            {/* Отправить итог людям: сыгранную партию раньше некуда было деть */}
+            <button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(gameResultText(viewed))
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                } catch {
+                  setCopied(false)
+                }
+              }}
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg font-semibold text-sm"
+              title="Скопировать итог текстом — можно отправить в переписке"
+            >
+              {copied ? '✓ Скопировано' : '📋 Скопировать итог'}
+            </button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {settlement.pairwise.map((d, i) => (
               <div key={i} className="bg-slate-900 rounded-lg px-5 py-4 flex items-center justify-between">
@@ -496,7 +605,15 @@ export function Table({ onBack }: Props = {}) {
       )}
 
       {dealFormOpen && !isFinished && !viewingHistory && (
-        <DealForm minBid={minBid} raspasState={game.raspasState} onClose={() => setDealFormOpen(false)} />
+        <DealForm
+          minBid={editIndex === null ? minBid : minBidFor(replayTo(game, editIndex).raspasState, rulesOf(game))}
+          raspasState={editIndex === null ? game.raspasState : replayTo(game, editIndex).raspasState}
+          edit={editIndex === null ? undefined : { index: editIndex, deal: game.deals[editIndex] }}
+          onClose={() => {
+            setDealFormOpen(false)
+            setEditIndex(null)
+          }}
+        />
       )}
 
       {/* Sticky-футер */}
@@ -511,7 +628,10 @@ export function Table({ onBack }: Props = {}) {
           </div>
         ) : (
           <button
-            onClick={() => setDealFormOpen(true)}
+            onClick={() => {
+              setEditIndex(null)
+              setDealFormOpen(true)
+            }}
             className="w-full py-5 bg-green-600 hover:bg-green-500 rounded-2xl text-2xl font-bold shadow-lg"
           >
             + Записать сдачу

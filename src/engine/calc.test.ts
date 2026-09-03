@@ -3,26 +3,35 @@
 
 import { describe, it, expect } from 'vitest'
 import { calcDeal } from './calc'
-import { settle } from './settle'
+import { applyDeal, recomputeState, freezeGame } from './index'
+import { prevClockwise, minBidFor } from './raspas'
+import { settle, calcNet } from './settle'
+import { gameResultText } from './report'
+import {
+  rulesOf, ladderAt, halfVistTricks, HOME_RULES, FSPR_RULES,
+} from './conventions'
+import {
+  POOL_COST, MOUNT_PENALTY, VIST_PER_TRICK, VISTERS_DUTY, VISTER_PENALTY_PER_MISS,
+  MISERE_POOL_COST, MISERE_TRICK_PENALTY, RASPAS_TRICK_COST,
+} from './rules'
 import { nextRaspasState, nextFirstHand, updateEightCounter, isEightRaspasFullCircle } from './raspas'
-import type { Deal, GameState } from './types'
+import type { Deal, GameState, PlayerId } from './types'
+import { PLAYERS, zeroScores, zeroWhists } from './types'
 
-// Хелпер: начальное пустое состояние
+// Хелпер: начальное пустое состояние. Стол на троих — все тесты этого файла
+// проверяют домашние правила Андрея, они же поведение до появления четвёртого места.
 function initState(): GameState {
   return {
-    players: { A: 'А', B: 'Б', C: 'В' },
+    players: { A: 'А', B: 'Б', C: 'В', D: '' },
+    seats: PLAYERS,
     poolLimit: 21,
     createdAt: Date.now(),
-    pool: { A: 0, B: 0, C: 0 },
-    mount: { A: 0, B: 0, C: 0 },
-    whists: {
-      A: { A: 0, B: 0, C: 0 },
-      B: { A: 0, B: 0, C: 0 },
-      C: { A: 0, B: 0, C: 0 },
-    },
+    pool: zeroScores(),
+    mount: zeroScores(),
+    whists: zeroWhists(),
     firstHand: 'A',
     raspasState: 'normal',
-    eightRaspasCounter: { A: 0, B: 0, C: 0 },
+    eightRaspasCounter: zeroScores(),
     deals: [],
   }
 }
@@ -36,14 +45,14 @@ describe('calcDeal — Игра сыграна', () => {
       player: 'C',
       contract: { kind: 'game', level: 7, suit: 'S' },
       playerTricks: 7,
-      vistersTricks: { A: 1, B: 2, C: 0 },
+      vistersTricks: { A: 1, B: 2, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const delta = calcDeal(deal)
     expect(delta.pool.C).toBe(4) // сыгранная 7 = 4 в пулю
     // A за 1 = 8; B за 2 = 16. Обязательство 7-й = 2 на пару, по 1 на игрока.
     // A взял 1 = норму, B взял 2 (переработал), штрафов нет.
-    expect(delta.mount).toEqual({ A: 0, B: 0, C: 0 })
+    expect(delta.mount).toEqual({ A: 0, B: 0, C: 0, D: 0 })
     const aToC = delta.whists.find((w) => w.from === 'A' && w.to === 'C')?.amount
     const bToC = delta.whists.find((w) => w.from === 'B' && w.to === 'C')?.amount
     expect(aToC).toBe(8)
@@ -59,7 +68,7 @@ describe('calcDeal — Игра сыграна', () => {
       player: 'A',
       contract: { kind: 'game', level: 6, suit: 'C' },
       playerTricks: 7,
-      vistersTricks: { A: 0, B: 1, C: 2 }, // B пас взял 1, C вист взял 2
+      vistersTricks: { A: 0, B: 1, C: 2, D: 0 }, // B пас взял 1, C вист взял 2
       vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
     }
     const delta = calcDeal(deal)
@@ -82,7 +91,7 @@ describe('calcDeal — Игра сыграна', () => {
       player: 'A',
       contract: { kind: 'game', level: 8, suit: 'S' },
       playerTricks: 9,
-      vistersTricks: { A: 0, B: 1, C: 0 },
+      vistersTricks: { A: 0, B: 1, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const delta = calcDeal(deal)
@@ -103,7 +112,7 @@ describe('calcDeal — Игра сыграна', () => {
       player: 'A',
       contract: { kind: 'game', level: 8, suit: 'S' },
       playerTricks: 10,
-      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const delta = calcDeal(deal)
@@ -120,7 +129,7 @@ describe('calcDeal — Игра сыграна', () => {
       player: 'A',
       contract: { kind: 'game', level: 9, suit: 'S' },
       playerTricks: 10,
-      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
     }
     const delta = calcDeal(deal)
@@ -137,7 +146,7 @@ describe('calcDeal — Игра сыграна', () => {
       player: 'A',
       contract: { kind: 'game', level: 6, suit: 'C' },
       playerTricks: 8,
-      vistersTricks: { A: 0, B: 1, C: 1 },
+      vistersTricks: { A: 0, B: 1, C: 1, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const delta = calcDeal(deal)
@@ -160,7 +169,7 @@ describe('calcDeal — Игра сыграна', () => {
       player: 'A',
       contract: { kind: 'game', level: 6, suit: 'C' },
       playerTricks: 7,
-      vistersTricks: { A: 0, B: 1, C: 2 },
+      vistersTricks: { A: 0, B: 1, C: 2, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' }, // оба вистуют
     }
     const delta = calcDeal(deal)
@@ -184,7 +193,7 @@ describe('calcDeal — Игра сыграна', () => {
       player: 'A',
       contract: { kind: 'game', level: 9, suit: 'H' },
       playerTricks: 10,
-      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const delta = calcDeal(deal)
@@ -204,7 +213,7 @@ describe('calcDeal — Ремиз играющего', () => {
       player: 'A',
       contract: { kind: 'game', level: 6, suit: 'C' },
       playerTricks: 5,
-      vistersTricks: { A: 0, B: 2, C: 3 },
+      vistersTricks: { A: 0, B: 2, C: 3, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const delta = calcDeal(deal)
@@ -225,7 +234,7 @@ describe('calcDeal — Ремиз играющего', () => {
       player: 'C',
       contract: { kind: 'game', level: 9, suit: 'S' },
       playerTricks: 7,
-      vistersTricks: { A: 1, B: 2, C: 0 },
+      vistersTricks: { A: 1, B: 2, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const delta = calcDeal(deal)
@@ -247,12 +256,12 @@ describe('Автомат-сценарии (без розыгрыша)', () => {
       player: 'A',
       contract: { kind: 'game', level: 6, suit: 'C' },
       playerTricks: 6, // не важно
-      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'pass' },
     }
     const delta = calcDeal(deal)
     expect(delta.pool.A).toBe(2)
-    expect(delta.mount).toEqual({ A: 0, B: 0, C: 0 })
+    expect(delta.mount).toEqual({ A: 0, B: 0, C: 0, D: 0 })
     expect(delta.whists).toHaveLength(0)
   })
 
@@ -264,7 +273,7 @@ describe('Автомат-сценарии (без розыгрыша)', () => {
       player: 'A',
       contract: { kind: 'game', level: 9, suit: 'H' },
       playerTricks: 0,
-      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'pass' },
     }
     const delta = calcDeal(deal)
@@ -280,7 +289,7 @@ describe('Автомат-сценарии (без розыгрыша)', () => {
       player: 'A',
       contract: { kind: 'game', level: 6, suit: 'C' },
       playerTricks: 6,
-      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'half' },
     }
     const delta = calcDeal(deal)
@@ -300,7 +309,7 @@ describe('Автомат-сценарии (без розыгрыша)', () => {
       player: 'A',
       contract: { kind: 'game', level: 7, suit: 'S' },
       playerTricks: 7,
-      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'half', C: 'pass' },
     }
     const delta = calcDeal(deal)
@@ -320,7 +329,7 @@ describe('calcDeal — Сталинград (6♠)', () => {
       player: 'C',
       contract: { kind: 'game', level: 6, suit: 'S' },
       playerTricks: 5,
-      vistersTricks: { A: 3, B: 2, C: 0 },
+      vistersTricks: { A: 3, B: 2, C: 0, D: 0 },
       vistDecisions: { A: 'pass', B: 'pass', C: 'vist' }, // оба «пас», но 6♠ → форс вист
     }
     const delta = calcDeal(deal)
@@ -345,7 +354,7 @@ describe('calcDeal — Мизер', () => {
     }
     const delta = calcDeal(deal)
     expect(delta.pool.B).toBe(10)
-    expect(delta.mount).toEqual({ A: 0, B: 0, C: 0 })
+    expect(delta.mount).toEqual({ A: 0, B: 0, C: 0, D: 0 })
   })
 
   it('мизер пойман на 2 взятки', () => {
@@ -368,13 +377,13 @@ describe('calcDeal — Распасы', () => {
   it('1-й распас: A взял 0 → бонус -4 с горы (при большой горе)', async () => {
     const { applyDeal } = await import('./index')
     const state = initState()
-    state.mount = { A: 58, B: 0, C: 40 }
+    state.mount = { A: 58, B: 0, C: 40, D: 0 }
     const deal: Deal = {
       type: 'raspas',
       dealer: 'A',
       firstHand: 'B',
       level: 1,
-      tricks: { A: 0, B: 3, C: 7 },
+      tricks: { A: 0, B: 3, C: 7, D: 0 },
     }
     const newState = applyDeal(state, deal)
     // A взял 0 → -4 с горы: 58 - 4 = 54. Также amnesty min=0, штрафа нет.
@@ -388,13 +397,13 @@ describe('calcDeal — Распасы', () => {
   it('1-й распас: A взял 0 при горе 2 → уходит в минус (гора не ограничена)', async () => {
     const { applyDeal } = await import('./index')
     const state = initState()
-    state.mount = { A: 2, B: 0, C: 0 }
+    state.mount = { A: 2, B: 0, C: 0, D: 0 }
     const deal: Deal = {
       type: 'raspas',
       dealer: 'A',
       firstHand: 'B',
       level: 1,
-      tricks: { A: 0, B: 5, C: 5 },
+      tricks: { A: 0, B: 5, C: 5, D: 0 },
     }
     const newState = applyDeal(state, deal)
     // A: 2 - 4 = -2
@@ -409,7 +418,7 @@ describe('calcDeal — Распасы', () => {
       dealer: 'A',
       firstHand: 'B',
       level: 1,
-      tricks: { A: 4, B: 3, C: 3 },
+      tricks: { A: 4, B: 3, C: 3, D: 0 },
     }
     const delta = calcDeal(deal)
     expect(delta.mount.A).toBe(2) // (4-3) × 2 = 2
@@ -423,7 +432,7 @@ describe('calcDeal — Распасы', () => {
       dealer: 'A',
       firstHand: 'B',
       level: 2,
-      tricks: { A: 5, B: 4, C: 1 },
+      tricks: { A: 5, B: 4, C: 1, D: 0 },
     }
     const delta = calcDeal(deal)
     expect(delta.mount.A).toBe((5 - 1) * 4) // 16
@@ -437,7 +446,7 @@ describe('calcDeal — Распасы', () => {
       dealer: 'A',
       firstHand: 'B',
       level: 3,
-      tricks: { A: 6, B: 2, C: 2 },
+      tricks: { A: 6, B: 2, C: 2, D: 0 },
     }
     const delta = calcDeal(deal)
     expect(delta.mount.A).toBe((6 - 2) * 6) // 24
@@ -477,21 +486,41 @@ describe('calcDeal — Уход без 3', () => {
 describe('nextRaspasState + nextFirstHand', () => {
   it('1-й распас в normal → afterFirst; первая рука сдвигается', () => {
     const state = initState()
-    const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 1, tricks: { A: 4, B: 3, C: 3 } }
+    const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 1, tricks: { A: 4, B: 3, C: 3, D: 0 } }
     const newState = nextRaspasState(state, deal)
     expect(newState).toBe('afterFirst')
     expect(nextFirstHand(state, deal, newState)).toBe('B')
   })
 
-  it('2-й распас в afterFirst → afterSecond', () => {
+  it('2-й распас сразу выводит на 8-мерные: минимум стал 8 — значит уже они', () => {
+    // Раньше между ними была лишняя ступень «после 2-го распаса» с тем же
+    // минимумом 8 и той же ценой 6. Отличалась только тем, что в ней не работало
+    // правило «рука остаётся» — из-за чего 26.08.2026 на 35-й сдаче рука ушла.
     const state: GameState = { ...initState(), raspasState: 'afterFirst' }
-    const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 2, tricks: { A: 4, B: 3, C: 3 } }
-    expect(nextRaspasState(state, deal)).toBe('afterSecond')
+    const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 2, tricks: { A: 4, B: 3, C: 3, D: 0 } }
+    expect(nextRaspasState(state, deal)).toBe('eightRaspas')
+    // И минимум, и цена взятки при этом те же, что были в старой ступени
+    expect(minBidFor('eightRaspas')).toBe(8)
+  })
+
+  it('уход без трёх на 8-мерных оставляет руку на месте', () => {
+    // Ровно тот случай: Олег заказал восьмерную и ушёл без трёх, рука должна
+    // остаться. Проверяем со ВТОРОГО распаса, а не с третьего.
+    let s: GameState = { ...initState(), raspasState: 'afterFirst' }
+    s = applyDeal(s, { type: 'raspas', dealer: 'C', firstHand: 'A', level: 2, tricks: { A: 4, B: 3, C: 3, D: 0 } })
+    expect(s.raspasState).toBe('eightRaspas')
+    const handBefore = s.firstHand
+    s = applyDeal(s, {
+      type: 'giveup', dealer: prevClockwise(handBefore), firstHand: handBefore,
+      player: 'B', contract: { kind: 'game', level: 8 },
+    })
+    expect(s.firstHand).toBe(handBefore) // осталась
+    expect(s.raspasState).toBe('eightRaspas')
   })
 
   it('3-й распас в afterSecond → eightRaspas', () => {
     const state: GameState = { ...initState(), raspasState: 'afterSecond' }
-    const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 3, tricks: { A: 4, B: 3, C: 3 } }
+    const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 3, tricks: { A: 4, B: 3, C: 3, D: 0 } }
     expect(nextRaspasState(state, deal)).toBe('eightRaspas')
   })
 
@@ -504,7 +533,7 @@ describe('nextRaspasState + nextFirstHand', () => {
       player: 'B',
       contract: { kind: 'game', level: 8, suit: 'S' },
       playerTricks: 7, // не сыграл
-      vistersTricks: { A: 2, B: 0, C: 1 },
+      vistersTricks: { A: 2, B: 0, C: 1, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const newState = nextRaspasState(state, deal)
@@ -521,7 +550,7 @@ describe('nextRaspasState + nextFirstHand', () => {
       player: 'B',
       contract: { kind: 'game', level: 7, suit: 'S' },
       playerTricks: 7, // сыграл
-      vistersTricks: { A: 2, B: 0, C: 1 },
+      vistersTricks: { A: 2, B: 0, C: 1, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     expect(nextRaspasState(state, deal)).toBe('normal')
@@ -536,7 +565,7 @@ describe('nextRaspasState + nextFirstHand', () => {
       player: 'B',
       contract: { kind: 'game', level: 7, suit: 'S' },
       playerTricks: 6, // недобор
-      vistersTricks: { A: 2, B: 0, C: 2 },
+      vistersTricks: { A: 2, B: 0, C: 2, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     expect(nextRaspasState(state, deal)).toBe('afterFirst')
@@ -551,7 +580,7 @@ describe('nextRaspasState + nextFirstHand', () => {
       player: 'B',
       contract: { kind: 'game', level: 8, suit: 'S' },
       playerTricks: 8,
-      vistersTricks: { A: 1, B: 0, C: 1 },
+      vistersTricks: { A: 1, B: 0, C: 1, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
     const newState = nextRaspasState(state, deal)
@@ -595,7 +624,7 @@ describe('8-мерные распасы: уход без 3 и полный кр�
       ...initState(),
       raspasState: 'eightRaspas',
       firstHand: 'B',
-      eightRaspasCounter: { A: 0, B: 1, C: 0 },
+      eightRaspasCounter: { A: 0, B: 1, C: 0, D: 0 },
     }
     const deal: Deal = {
       type: 'giveup',
@@ -616,19 +645,19 @@ describe('8-мерные распасы: уход без 3 и полный кр�
       ...initState(),
       raspasState: 'eightRaspas',
       firstHand: 'C',
-      eightRaspasCounter: { A: 1, B: 1, C: 0 },
+      eightRaspasCounter: { A: 1, B: 1, C: 0, D: 0 },
     }
     const deal: Deal = {
       type: 'raspas',
       dealer: 'B',
       firstHand: 'C',
       level: 3,
-      tricks: { A: 3, B: 3, C: 4 },
+      tricks: { A: 3, B: 3, C: 4, D: 0 },
     }
     const newState = applyDeal(state, deal)
     // C побывал первой рукой в этой сдаче → counter стал A=1, B=1, C=1 → полный круг → normal
     expect(newState.raspasState).toBe('normal')
-    expect(newState.eightRaspasCounter).toEqual({ A: 0, B: 0, C: 0 })
+    expect(newState.eightRaspasCounter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
   })
 
   it('распас в 8-мерных → не полный круг → остаёмся в 8-мерных', async () => {
@@ -637,14 +666,14 @@ describe('8-мерные распасы: уход без 3 и полный кр�
       ...initState(),
       raspasState: 'eightRaspas',
       firstHand: 'A',
-      eightRaspasCounter: { A: 0, B: 0, C: 0 }, // только что зашли
+      eightRaspasCounter: { A: 0, B: 0, C: 0, D: 0 }, // только что зашли
     }
     const deal: Deal = {
       type: 'raspas',
       dealer: 'C',
       firstHand: 'A',
       level: 3,
-      tricks: { A: 4, B: 3, C: 3 },
+      tricks: { A: 4, B: 3, C: 3, D: 0 },
     }
     const newState = applyDeal(state, deal)
     expect(newState.raspasState).toBe('eightRaspas') // остались
@@ -657,21 +686,23 @@ describe('8-мерные распасы: уход без 3 и полный кр�
 describe('8-мерные распасы: счётчик и полный круг', () => {
   it('вход в 8-мерные → счётчик первой руки = 1, остальные 0', () => {
     const state: GameState = { ...initState(), raspasState: 'afterSecond', firstHand: 'A' }
-    const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 3, tricks: { A: 4, B: 3, C: 3 } }
+    const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 3, tricks: { A: 4, B: 3, C: 3, D: 0 } }
     const newState = nextRaspasState(state, deal)
     expect(newState).toBe('eightRaspas')
+    // Счётчик круга начинается ПУСТЫМ: сдача, которая привела на восьмерные,
+    // игралась ещё по прежней цене и в режим не входит.
     const counter = updateEightCounter(state, newState, 'A')
-    expect(counter).toEqual({ A: 1, B: 0, C: 0 })
+    expect(counter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
     expect(isEightRaspasFullCircle(counter)).toBe(false)
   })
 
   it('после того как каждый посидел на 1 руке ≥ 1 раз — полный круг', () => {
-    const counter = { A: 1, B: 1, C: 1 } as Record<'A' | 'B' | 'C', number>
+    const counter = { A: 1, B: 1, C: 1, D: 0 } as Record<PlayerId, number>
     expect(isEightRaspasFullCircle(counter)).toBe(true)
   })
 
   it('один сидел много раз, другой ни разу — не полный круг', () => {
-    const counter = { A: 3, B: 0, C: 1 } as Record<'A' | 'B' | 'C', number>
+    const counter = { A: 3, B: 0, C: 1, D: 0 } as Record<PlayerId, number>
     expect(isEightRaspasFullCircle(counter)).toBe(false)
   })
 })
@@ -681,7 +712,7 @@ describe('Переполнение пули (передача по часово�
     const { applyDeal } = await import('./index')
     const state = initState()
     state.poolLimit = 11
-    state.pool = { A: 10, B: 0, C: 0 }
+    state.pool = { A: 10, B: 0, C: 0, D: 0 }
     const deal: Deal = {
       type: 'game',
       dealer: 'C',
@@ -689,7 +720,7 @@ describe('Переполнение пули (передача по часово�
       player: 'A',
       contract: { kind: 'game', level: 6, suit: 'C' },
       playerTricks: 7,
-      vistersTricks: { A: 0, B: 0, C: 0 },
+      vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'pass' },
     }
     const newState = applyDeal(state, deal)
@@ -703,8 +734,8 @@ describe('Переполнение пули (передача по часово�
     const { applyDeal } = await import('./index')
     const state = initState()
     state.poolLimit = 11
-    state.pool = { A: 11, B: 11, C: 10 }
-    state.mount = { A: 100, B: 0, C: 0 }
+    state.pool = { A: 11, B: 11, C: 10, D: 0 }
+    state.mount = { A: 100, B: 0, C: 0, D: 0 }
     // A играет 9♥ и сыграл → пуля +8, все нужно передать/списать.
     // C принимает 1 (стал 11). Остаток 7. По правилу: 7 × 2 = 14 с горы А.
     // A: 100 - 14 = 86
@@ -715,7 +746,7 @@ describe('Переполнение пули (передача по часово�
       player: 'A',
       contract: { kind: 'game', level: 9, suit: 'H' },
       playerTricks: 9,
-      vistersTricks: { A: 0, B: 0, C: 1 },
+      vistersTricks: { A: 0, B: 0, C: 1, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
     }
     const newState = applyDeal(state, deal)
@@ -731,7 +762,7 @@ describe('Переполнение пули (передача по часово�
     const { applyDeal } = await import('./index')
     const state = initState()
     state.poolLimit = 11
-    state.pool = { A: 9, B: 11, C: 5 } // A 9, B закрыт, C 5
+    state.pool = { A: 9, B: 11, C: 5, D: 0 } // A 9, B закрыт, C 5
     // A играет девятерную и сыграл → пуля +8 → 17 (переполнение 6)
     const deal: Deal = {
       type: 'game',
@@ -740,7 +771,7 @@ describe('Переполнение пули (передача по часово�
       player: 'A',
       contract: { kind: 'game', level: 9, suit: 'H' },
       playerTricks: 9,
-      vistersTricks: { A: 0, B: 0, C: 1 },
+      vistersTricks: { A: 0, B: 0, C: 1, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
     }
     const newState = applyDeal(state, deal)
@@ -755,12 +786,13 @@ describe('Переполнение пули (передача по часово�
 describe('settle — финальный расчёт', () => {
   it('сумма net всех игроков = 0', () => {
     const state = initState()
-    state.pool = { A: 10, B: 5, C: 8 }
-    state.mount = { A: 4, B: 12, C: 2 }
+    state.pool = { A: 10, B: 5, C: 8, D: 0 }
+    state.mount = { A: 4, B: 12, C: 2, D: 0 }
     state.whists = {
-      A: { A: 0, B: 20, C: 15 },
-      B: { A: 10, B: 0, C: 25 },
-      C: { A: 5, B: 8, C: 0 },
+      A: { A: 0, B: 20, C: 15, D: 0 },
+      B: { A: 10, B: 0, C: 25, D: 0 },
+      C: { A: 5, B: 8, C: 0, D: 0 },
+      D: zeroScores(),
     }
     const result = settle(state)
     const sum = result.net.A + result.net.B + result.net.C
@@ -769,7 +801,7 @@ describe('settle — финальный расчёт', () => {
 
   it('пуля A=10, все остальные 0 — A на плюсе', () => {
     const state = initState()
-    state.pool = { A: 10, B: 0, C: 0 }
+    state.pool = { A: 10, B: 0, C: 0, D: 0 }
     const result = settle(state)
     expect(result.net.A).toBeGreaterThan(0)
     expect(result.net.B).toBeLessThan(0)
@@ -778,7 +810,7 @@ describe('settle — финальный расчёт', () => {
 
   it('гора одного игрока — он в минусе', () => {
     const state = initState()
-    state.mount = { A: 0, B: 20, C: 0 }
+    state.mount = { A: 0, B: 20, C: 0, D: 0 }
     const result = settle(state)
     expect(result.net.B).toBeLessThan(0)
     expect(result.net.A).toBeGreaterThan(0)
@@ -787,17 +819,570 @@ describe('settle — финальный расчёт', () => {
 
   it('попарные долги: сумма отданного = сумма полученного', () => {
     const state = initState()
-    state.pool = { A: 5, B: 8, C: 2 }
-    state.mount = { A: 12, B: 4, C: 20 }
+    state.pool = { A: 5, B: 8, C: 2, D: 0 }
+    state.mount = { A: 12, B: 4, C: 20, D: 0 }
     state.whists = {
-      A: { A: 0, B: 15, C: 30 },
-      B: { A: 20, B: 0, C: 10 },
-      C: { A: 5, B: 12, C: 0 },
+      A: { A: 0, B: 15, C: 30, D: 0 },
+      B: { A: 20, B: 0, C: 10, D: 0 },
+      C: { A: 5, B: 12, C: 0, D: 0 },
+      D: zeroScores(),
     }
     const result = settle(state)
     const totalDebt = result.pairwise.reduce((s, d) => s + d.amount, 0)
     // Сумма позитивного net = сумма долгов
     const totalPositive = Math.max(0, result.net.A) + Math.max(0, result.net.B) + Math.max(0, result.net.C)
     expect(Math.abs(totalDebt - totalPositive)).toBeLessThan(3)
+  })
+})
+
+// ============================================================================
+// Стол на ЧЕТВЕРЫХ (этап 1 универсализации)
+// Проверяем только каркас: кто участвует в сдаче и попадают ли взятки четвёртого
+// в расчёт. Турнирные правила ФСПР (премия за прикуп, консоляция сдающему,
+// распасы без амнистии) появятся отдельно — см. PROGRESS.md, этап 3.
+// ============================================================================
+
+const SEATS4: PlayerId[] = ['A', 'B', 'C', 'D']
+
+function initState4(): GameState {
+  return { ...initState(), players: { A: 'А', B: 'Б', C: 'В', D: 'Г' }, seats: SEATS4 }
+}
+
+describe('Стол на четверых — каркас', () => {
+  it('сдающий вне розыгрыша: вистующих двое, сдающему ничего не пишется', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'D', // D сдал — в розыгрыше не участвует
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 7 },
+      playerTricks: 7,
+      vistersTricks: { B: 1, C: 2 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+    }
+    const delta = calcDeal(deal, SEATS4)
+    expect(delta.pool.A).toBe(4)
+    expect(delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount).toBe(8)
+    expect(delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount).toBe(16)
+    // Сдающий не вистовал и ничего не пишет
+    expect(delta.whists.find((w) => w.from === 'D')).toBeUndefined()
+    expect(delta.mount.D).toBe(0)
+    expect(delta.pool.D).toBe(0)
+  })
+
+  it('сдающий не считается пасовавшим: игра НЕ уходит в автомат', () => {
+    // Втроём «оба пасовали» = автомат без розыгрыша. Вчетвером сдающий вообще
+    // не торгуется, и его молчание не должно превращать сдачу в автомат.
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'D',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6 },
+      playerTricks: 4, // ремиз без 2
+      vistersTricks: { B: 3, C: 3 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+    }
+    const delta = calcDeal(deal, SEATS4)
+    expect(delta.pool.A).toBe(0) // не автомат — играющий сел
+    expect(delta.mount.A).toBe(8) // недобор 2 × 4
+  })
+
+  it('распас вчетвером: сдающий пишет взятки прикупа на общих основаниях', () => {
+    // Кодекс ФСПР 6.5: прикуп открывается по карте, первые два хода делает
+    // сдатчик и пишет за взятки как все. Сумма взяток всех четверых = 10.
+    const deal: Deal = {
+      type: 'raspas',
+      dealer: 'D',
+      firstHand: 'A',
+      level: 1,
+      tricks: { A: 4, B: 3, C: 1, D: 2 },
+    }
+    const delta = calcDeal(deal, SEATS4)
+    // Минимум 1 у C — амнистия. Цена взятки 1-го распаса = 2.
+    expect(delta.mount.A).toBe(6) // (4−1) × 2
+    expect(delta.mount.B).toBe(4) // (3−1) × 2
+    expect(delta.mount.C).toBe(0) // минимум
+    expect(delta.mount.D).toBe(2) // (2−1) × 2 — взятки сдающего считаются
+  })
+
+  it('первая рука обходит все четыре места по часовой', () => {
+    const state = initState4()
+    const deal: Deal = {
+      type: 'raspas', dealer: 'D', firstHand: 'A', level: 1, tricks: { A: 4, B: 3, C: 2, D: 1 },
+    }
+    let s = applyDeal(state, deal)
+    expect(s.firstHand).toBe('B')
+    s = applyDeal(s, { ...deal, firstHand: 'B', dealer: 'A' })
+    expect(s.firstHand).toBe('C')
+    s = applyDeal(s, { ...deal, firstHand: 'C', dealer: 'B' })
+    expect(s.firstHand).toBe('D')
+    s = applyDeal(s, { ...deal, firstHand: 'D', dealer: 'C' })
+    expect(s.firstHand).toBe('A') // круг замкнулся
+  })
+
+  it('итог вчетвером сходится: сумма net = 0', () => {
+    const state = initState4()
+    state.pool = { A: 10, B: 5, C: 8, D: 3 }
+    state.mount = { A: 4, B: 12, C: 2, D: 7 }
+    state.whists = {
+      A: { A: 0, B: 20, C: 15, D: 5 },
+      B: { A: 10, B: 0, C: 25, D: 0 },
+      C: { A: 5, B: 8, C: 0, D: 12 },
+      D: { A: 3, B: 0, C: 6, D: 0 },
+    }
+    // Проверяем неокруглённый баланс: он обязан сходиться в ноль ТОЧНО.
+    // settle() округляет каждый net для показа, и на «половинках» округление
+    // даёт расхождение в пару вистов — это косметика показа, а не ошибка счёта.
+    const net = calcNet(state)
+    const sum = net.A + net.B + net.C + net.D
+    expect(Math.abs(sum)).toBeLessThan(0.001)
+  })
+})
+
+// ============================================================================
+// Заморозка итога сыгранной партии
+// ============================================================================
+
+describe('Вмороженная партия не пересчитывается', () => {
+  const played: Deal = {
+    type: 'game',
+    dealer: 'C',
+    firstHand: 'A',
+    player: 'C',
+    contract: { kind: 'game', level: 7 },
+    playerTricks: 7,
+    vistersTricks: { A: 1, B: 2 },
+    vistDecisions: { A: 'vist', B: 'vist' },
+  }
+
+  it('идущая партия — пересчитывается из сдач, кеш чинится', () => {
+    const g: GameState = { ...initState(), deals: [played] }
+    // В кеше мусор, но пули не закрыты — партия идёт, пересчёт обязан выправить
+    g.pool = { A: 5, B: 5, C: 5, D: 0 }
+    const out = recomputeState(g)
+    expect(out.pool.C).toBe(4)
+    expect(out.pool.A).toBe(0)
+  })
+
+  it('с меткой frozenAt — цифры остаются как записаны, даже неверные', () => {
+    const g: GameState = { ...initState(), deals: [played], frozenAt: 1756200000000 }
+    g.pool = { A: 9, B: 4, C: 6, D: 0 }
+    const out = recomputeState(g)
+    // Ровно то, что было записано: партия сыграна, её итог зафиксирован
+    expect(out.pool).toEqual({ A: 9, B: 4, C: 6, D: 0 })
+    expect(out).toBe(g) // и объект тот же — никакой работы не делалось
+  })
+
+  it('завершённая вручную партия БЕЗ метки тоже не пересчитывается', () => {
+    // Партии, сыгранные до появления заморозки, метки не имеют. Их защищает сама
+    // завершённость — иначе пришлось бы лезть в облако и проставлять метки.
+    const g: GameState = { ...initState(), deals: [played], finishedManually: true }
+    g.pool = { A: 7, B: 3, C: 5, D: 0 }
+    expect(recomputeState(g).pool).toEqual({ A: 7, B: 3, C: 5, D: 0 })
+  })
+
+  it('партия с закрытыми пулями не пересчитывается', () => {
+    const g: GameState = { ...initState(), deals: [played], poolLimit: 21 }
+    g.pool = { A: 21, B: 21, C: 21, D: 0 }
+    expect(recomputeState(g).pool).toEqual({ A: 21, B: 21, C: 21, D: 0 })
+  })
+
+  it('НЕзавершённая партия пересчитывается как раньше', () => {
+    const g: GameState = { ...initState(), deals: [played] }
+    g.pool = { A: 9, B: 0, C: 0, D: 0 }
+    expect(recomputeState(g).pool.A).toBe(0)
+    expect(recomputeState(g).pool.C).toBe(4)
+  })
+
+  it('freezeGame ставит метку один раз и не перетирает её', () => {
+    const g: GameState = { ...initState(), deals: [played] }
+    const once = freezeGame(g, 111)
+    expect(once.frozenAt).toBe(111)
+    const twice = freezeGame(once, 222)
+    expect(twice.frozenAt).toBe(111) // повторная заморозка не сдвигает дату
+  })
+})
+
+// ============================================================================
+// Конвенции: каркас
+// ============================================================================
+
+describe('Конвенции партии', () => {
+  it('партия без правил считается по пресету «Дом»', () => {
+    expect(rulesOf(initState()).id).toBe('home')
+  })
+
+  it('пресет «Дом» совпадает с константами, по которым считались старые партии', () => {
+    // Если это разойдётся — старые партии посчитаются по-другому. Тест ровно об этом.
+    expect(HOME_RULES.poolCost).toEqual(POOL_COST)
+    expect(HOME_RULES.mountPenalty).toEqual(MOUNT_PENALTY)
+    expect(HOME_RULES.vistPerTrick).toEqual(VIST_PER_TRICK)
+    expect(HOME_RULES.vistersDuty).toEqual(VISTERS_DUTY)
+    expect(HOME_RULES.visterPenaltyPerMiss).toEqual(VISTER_PENALTY_PER_MISS)
+    expect(HOME_RULES.miserePoolCost).toBe(MISERE_POOL_COST)
+    expect(HOME_RULES.misereTrickPenalty).toBe(MISERE_TRICK_PENALTY)
+    // Лесенки: цена взятки на распасах и минимальный заказ
+    expect([1, 2, 3].map((l) => ladderAt(HOME_RULES.raspasCostLadder, l - 1))).toEqual([
+      RASPAS_TRICK_COST[1], RASPAS_TRICK_COST[2], RASPAS_TRICK_COST[3],
+    ])
+    expect([0, 1, 2].map((s) => ladderAt(HOME_RULES.minBidLadder, s))).toEqual([6, 7, 8])
+  })
+
+  it('лесенка: последнее значение повторяется дальше', () => {
+    // Пятый распас подряд стоит столько же, сколько третий
+    expect(ladderAt(HOME_RULES.raspasCostLadder, 4)).toBe(6)
+    expect(ladderAt(HOME_RULES.minBidLadder, 9)).toBe(8) // дом: 6-7-8-8-8…
+    expect(ladderAt(FSPR_RULES.minBidLadder, 9)).toBe(7) // турнир: 6-7-7-7…
+  })
+
+  it('полвиста = половина нормы пары', () => {
+    expect(halfVistTricks(HOME_RULES, 6)).toBe(2)
+    expect(halfVistTricks(HOME_RULES, 7)).toBe(1)
+    // «Уход второго за две (6-я) / за одну (7-я)» — то же самое
+    expect(halfVistTricks(FSPR_RULES, 6)).toBe(2)
+    expect(halfVistTricks(FSPR_RULES, 7)).toBe(1)
+  })
+
+  it('турнир и дом расходятся именно там, где мы договорились', () => {
+    expect(FSPR_RULES.vistStyle).toBe('gentleman')
+    expect(HOME_RULES.vistStyle).toBe('zhlob')
+    expect(FSPR_RULES.vistersDuty[10]).toBe(1) // десятерная вистуется
+    expect(HOME_RULES.vistersDuty[10]).toBe(0) // дома проверяется
+    expect(FSPR_RULES.raspasWriteEveryTrick).toBe(true)
+    expect(HOME_RULES.raspasWriteEveryTrick).toBe(false)
+    expect(FSPR_RULES.misereBreaksRaspas).toBe(false)
+    expect(HOME_RULES.misereBreaksRaspas).toBe(true)
+    expect(FSPR_RULES.allowGiveup).toBe(false)
+    expect(FSPR_RULES.prikupBonus).toBe(true)
+    expect(FSPR_RULES.poolLimit).toBeNull() // играют на время
+  })
+})
+
+// ============================================================================
+// СТОРОЖ: восьмерные распасы целиком, ровно как это было у Андрея за столом
+//
+// Партия 26.08.2026, сдачи 33-38. Две ошибки, которые тут заперты:
+//   1) восьмерные начинались на сдачу позже — со ТРЕТЬЕГО распаса вместо второго,
+//      из-за чего уход без трёх передавал руку, хотя должен был оставить;
+//   2) круг засчитывал сдачу, которая только ПРИВЕЛА на восьмерные, и мог
+//      замкнуться при том, что человек первой рукой на них не сидел.
+// ============================================================================
+
+describe('Восьмерные распасы: сценарий из живой партии', () => {
+  const raspas = (firstHand: PlayerId, level: 1 | 2 | 3): Deal => ({
+    type: 'raspas',
+    dealer: prevClockwise(firstHand),
+    firstHand,
+    level,
+    tricks: { A: 4, B: 3, C: 3, D: 0 },
+  })
+
+  it('второй распас открывает восьмерные, уход без трёх оставляет руку, круг ждёт всех', () => {
+    let s: GameState = initState()
+    expect(s.firstHand).toBe('A')
+
+    // Первый распас: минимум становится 7
+    s = applyDeal(s, raspas('A', 1))
+    expect(s.raspasState).toBe('afterFirst')
+    expect(minBidFor(s.raspasState)).toBe(7)
+    expect(s.firstHand).toBe('B')
+
+    // Второй распас: минимум 8 — значит УЖЕ восьмерные, а не «после 2-го»
+    s = applyDeal(s, raspas('B', 2))
+    expect(s.raspasState).toBe('eightRaspas')
+    expect(minBidFor(s.raspasState)).toBe(8)
+    expect(s.firstHand).toBe('C')
+    // Счётчик круга пуст: сдача, которая привела сюда, не в счёт
+    expect(s.eightRaspasCounter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
+
+    // Кто-то заказал восьмерную и ушёл без трёх — РУКА ОСТАЁТСЯ
+    s = applyDeal(s, {
+      type: 'giveup',
+      dealer: prevClockwise('C'),
+      firstHand: 'C',
+      player: 'B',
+      contract: { kind: 'game', level: 8 },
+    })
+    expect(s.firstHand).toBe('C')
+    expect(s.raspasState).toBe('eightRaspas')
+    expect(s.eightRaspasCounter.C).toBe(1)
+
+    // Дальше распасы — рука идёт по кругу
+    s = applyDeal(s, raspas('C', 3))
+    expect(s.firstHand).toBe('A')
+    expect(s.raspasState).toBe('eightRaspas')
+
+    s = applyDeal(s, raspas('A', 3))
+    expect(s.firstHand).toBe('B')
+    // A отсидел, C отсидел, B ещё нет — круг НЕ замкнут
+    expect(s.raspasState).toBe('eightRaspas')
+
+    // И только когда сел последний — восьмерные кончаются
+    s = applyDeal(s, raspas('B', 3))
+    expect(s.raspasState).toBe('normal')
+    expect(minBidFor(s.raspasState)).toBe(6)
+  })
+
+  it('несыгранная восьмерная тоже оставляет руку, а сыгранная гасит распасы сразу', () => {
+    let s: GameState = initState()
+    s = applyDeal(s, raspas('A', 1))
+    s = applyDeal(s, raspas('B', 2))
+    expect(s.raspasState).toBe('eightRaspas')
+    const hand = s.firstHand
+
+    // Заказал восьмерную и сел — рука остаётся
+    s = applyDeal(s, {
+      type: 'game',
+      dealer: prevClockwise(hand),
+      firstHand: hand,
+      player: 'A',
+      contract: { kind: 'game', level: 8 },
+      playerTricks: 6,
+      vistersTricks: { B: 2, C: 2 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+    })
+    expect(s.firstHand).toBe(hand)
+    expect(s.raspasState).toBe('eightRaspas')
+
+    // А сыграл — восьмерные кончились, круг досиживать не нужно
+    s = applyDeal(s, {
+      type: 'game',
+      dealer: prevClockwise(hand),
+      firstHand: hand,
+      player: 'A',
+      contract: { kind: 'game', level: 8 },
+      playerTricks: 8,
+      vistersTricks: { B: 1, C: 1 },
+      vistDecisions: { B: 'vist', C: 'vist' },
+    })
+    expect(s.raspasState).toBe('normal')
+    expect(minBidFor(s.raspasState)).toBe(6)
+  })
+
+  it('пойманный мизер на восьмерных тоже оставляет руку', () => {
+    let s: GameState = initState()
+    s = applyDeal(s, raspas('A', 1))
+    s = applyDeal(s, raspas('B', 2))
+    const hand = s.firstHand
+    s = applyDeal(s, {
+      type: 'misere',
+      dealer: prevClockwise(hand),
+      firstHand: hand,
+      player: 'A',
+      blind: false,
+      playerTricks: 2,
+    })
+    expect(s.firstHand).toBe(hand)
+    expect(s.raspasState).toBe('eightRaspas')
+  })
+})
+
+// ============================================================================
+// Восьмерные распасы ВЧЕТВЕРОМ по домашним конвенциям.
+// Требование Андрея: те же правила, что втроём. Главное — полный круг должен
+// ждать ВСЕХ ЧЕТВЕРЫХ, а не троих.
+// ============================================================================
+
+describe('Восьмерные распасы вчетвером, домашние правила', () => {
+  const SEATS: PlayerId[] = ['A', 'B', 'C', 'D']
+  const start = (): GameState => ({
+    ...initState(),
+    players: { A: 'А', B: 'Б', C: 'В', D: 'Г' },
+    seats: SEATS,
+  })
+  // Взятки на распасе вчетвером — в сумме 10
+  const raspas = (firstHand: PlayerId, level: 1 | 2 | 3): Deal => ({
+    type: 'raspas',
+    dealer: prevClockwise(firstHand, SEATS),
+    firstHand,
+    level,
+    tricks: { A: 3, B: 3, C: 2, D: 2 },
+  })
+
+  it('круг ждёт всех четверых, а не троих', () => {
+    let s = start()
+    s = applyDeal(s, raspas('A', 1)) // шестерной, взятка 2
+    expect(s.raspasState).toBe('afterFirst')
+    s = applyDeal(s, raspas('B', 2)) // семерной, взятка 4 → пошли восьмерные
+    expect(s.raspasState).toBe('eightRaspas')
+    expect(s.eightRaspasCounter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
+    expect(s.firstHand).toBe('C')
+
+    // Три восьмерных распаса: отсидели C, D, A — но Б ещё нет
+    s = applyDeal(s, raspas('C', 3))
+    s = applyDeal(s, raspas('D', 3))
+    s = applyDeal(s, raspas('A', 3))
+    expect(s.raspasState).toBe('eightRaspas') // втроём тут круг бы уже закрылся
+    expect(s.firstHand).toBe('B')
+
+    // И только когда сел четвёртый — восьмерные кончаются
+    s = applyDeal(s, raspas('B', 3))
+    expect(s.raspasState).toBe('normal')
+    expect(minBidFor(s.raspasState)).toBe(6)
+  })
+
+  it('уход без трёх оставляет руку и вчетвером', () => {
+    let s = start()
+    s = applyDeal(s, raspas('A', 1))
+    s = applyDeal(s, raspas('B', 2))
+    const hand = s.firstHand
+    expect(hand).toBe('C')
+    s = applyDeal(s, {
+      type: 'giveup',
+      dealer: prevClockwise('C', SEATS),
+      firstHand: 'C',
+      player: 'A',
+      contract: { kind: 'game', level: 8 },
+    })
+    expect(s.firstHand).toBe('C')
+    expect(s.raspasState).toBe('eightRaspas')
+  })
+
+  it('рука обходит все четыре места, а не три', () => {
+    let s = start()
+    s = applyDeal(s, raspas('A', 1))
+    expect(s.firstHand).toBe('B')
+    s = applyDeal(s, raspas('B', 2))
+    expect(s.firstHand).toBe('C')
+    s = applyDeal(s, raspas('C', 3))
+    expect(s.firstHand).toBe('D')
+    s = applyDeal(s, raspas('D', 3))
+    expect(s.firstHand).toBe('A')
+  })
+})
+
+// ============================================================================
+// Правка сдачи в середине партии
+//
+// Ошибиться при записи легко: не тот игрок, не то число взяток. Раньше поправить
+// можно было только последнюю сдачу, и ошибка тащилась до конца партии — так у
+// Андрея и вышло 26.08.2026. Теперь любую сдачу можно заменить, и партия
+// пересчитывается с неё.
+// ============================================================================
+
+describe('Правка сдачи в середине партии', () => {
+  const played = (player: PlayerId, tricks: number, firstHand: PlayerId): Deal => ({
+    type: 'game',
+    dealer: prevClockwise(firstHand),
+    firstHand,
+    player,
+    contract: { kind: 'game', level: 7 },
+    playerTricks: tricks,
+    vistersTricks: {},
+    vistDecisions: { A: 'pass', B: 'pass', C: 'pass' },
+  })
+
+  it('исправленная партия совпадает с той, где сразу записали правильно', () => {
+    // Записали три сдачи, во второй ошиблись игроком: вместо B поставили C
+    const wrong = [played('A', 7, 'A'), played('C', 7, 'B'), played('A', 7, 'C')]
+    const right = [played('A', 7, 'A'), played('B', 7, 'B'), played('A', 7, 'C')]
+
+    const withMistake = recomputeState({ ...initState(), deals: wrong })
+    // Правим вторую сдачу
+    const fixed = recomputeState({ ...initState(), deals: [wrong[0], right[1], wrong[2]] })
+    const asIfCorrect = recomputeState({ ...initState(), deals: right })
+
+    // Исправленная партия неотличима от той, где ошибки не было
+    expect(fixed.pool).toEqual(asIfCorrect.pool)
+    expect(fixed.mount).toEqual(asIfCorrect.mount)
+    expect(fixed.whists).toEqual(asIfCorrect.whists)
+    // И она действительно отличается от ошибочной
+    expect(fixed.pool).not.toEqual(withMistake.pool)
+  })
+
+  it('правка сдачи пересчитывает переход хода и состояние распасов после неё', () => {
+    const raspas = (firstHand: PlayerId, level: 1 | 2 | 3): Deal => ({
+      type: 'raspas',
+      dealer: prevClockwise(firstHand),
+      firstHand,
+      level,
+      tricks: { A: 4, B: 3, C: 3, D: 0 },
+    })
+    // Два распаса подряд — вышли на восьмерные
+    const deals: Deal[] = [raspas('A', 1), raspas('B', 2)]
+    const before = recomputeState({ ...initState(), deals })
+    expect(before.raspasState).toBe('eightRaspas')
+
+    // Оказалось, что первой сдачи-распаса не было: там сыграли семерную.
+    // Значит распас остался один, и до восьмерных дело не дошло.
+    const corrected: Deal[] = [played('A', 7, 'A'), deals[1]]
+    const after = recomputeState({ ...initState(), deals: corrected })
+    expect(after.raspasState).toBe('afterFirst')
+    expect(minBidFor(after.raspasState)).toBe(7)
+
+    // И цена взятки пересчиталась: распас стал шестерным, а не семерным,
+    // хотя в записи у него по-прежнему стоит уровень 2
+    expect(after.mount.A).toBe(2) // (4−3) × 2, а было бы × 4
+  })
+
+  it('удаление сдачи из середины тоже пересчитывает всё после неё', () => {
+    const deals = [played('A', 7, 'A'), played('B', 7, 'B'), played('C', 7, 'C')]
+    const full = recomputeState({ ...initState(), deals })
+    const without = recomputeState({ ...initState(), deals: [deals[0], deals[2]] })
+    expect(full.deals).toHaveLength(3)
+    expect(without.deals).toHaveLength(2)
+    // У B пуля больше не растёт
+    expect(without.pool.B).toBe(0)
+    expect(full.pool.B).toBe(4)
+  })
+})
+
+// ============================================================================
+// Курс перевода в висты влияет на итог
+//
+// Ленинградка: очко пули = 2 очка горы. Сочинка, ростов, классика: 1 к 1.
+// В калькуляторе курс выбирается кнопкой, и от него зависит не только величина
+// итога, но и кто кого обыграл.
+// ============================================================================
+
+describe('Курс перевода в висты', () => {
+  const withRate = (poolToVists: number): GameState => ({
+    ...initState(),
+    rules: { ...HOME_RULES, poolToVists, mountToVists: 10 },
+    pool: { ...zeroScores(), A: 21, B: 10, C: 4 },
+    mount: { ...zeroScores(), A: 60, B: 120, C: 40 },
+  })
+
+  it('ленинградка и сочинка дают разный итог', () => {
+    const len = settle(withRate(20)).net
+    const soch = settle(withRate(10)).net
+    expect(len).not.toEqual(soch)
+  })
+
+  it('на этих числах меняется даже то, кто впереди', () => {
+    const len = settle(withRate(20)).net
+    const soch = settle(withRate(10)).net
+    // По ленинградке впереди A, по сочинке — C
+    expect(len.A).toBeGreaterThan(len.C)
+    expect(soch.C).toBeGreaterThan(soch.A)
+  })
+
+  it('при любом курсе сумма сходится в ноль', () => {
+    for (const rate of [10, 20]) {
+      const net = calcNet(withRate(rate))
+      expect(Math.abs(net.A + net.B + net.C)).toBeLessThan(0.001)
+    }
+  })
+})
+
+describe('Итог партии текстом', () => {
+  it('содержит имена, числа, долги и правила', () => {
+    const g: GameState = {
+      ...initState(),
+      players: { A: 'Дмитрий', B: 'Олег', C: 'Андрей', D: '' },
+      pool: { ...zeroScores(), A: 21, B: 10, C: 4 },
+      mount: { ...zeroScores(), A: 60, B: 120, C: 40 },
+    }
+    const text = gameResultText(g)
+    expect(text).toContain('Дмитрий: пуля 21, гора 60')
+    expect(text).toContain('Олег: пуля 10, гора 120')
+    expect(text).toContain('должен')
+    expect(text).toContain('Правила: Дом (Андрей)')
+  })
+
+  it('когда все в нуле — так и написано', () => {
+    const text = gameResultText(initState())
+    expect(text).toContain('Никто никому ничего не должен')
   })
 })

@@ -25,9 +25,10 @@ interface Props {
   onOpenGame: () => void
   onNewGame: () => void
   onOpenStats: () => void
+  onOpenCalc: () => void
 }
 
-export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
+export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Props) {
   const [games, setGames] = useState<CloudGameItem[]>([])
   const [loading, setLoading] = useState(true)
   const [syncOk, setSyncOk] = useState(false)
@@ -159,6 +160,13 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats }: Props) {
               title="Обновить список партий"
             >
               {loading ? '...' : '↻'}
+            </button>
+            <button
+              onClick={onOpenCalc}
+              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold"
+              title="Посчитать пульку, записанную на бумаге"
+            >
+              🧮 Калькулятор
             </button>
             <button
               onClick={onOpenStats}

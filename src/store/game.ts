@@ -2,10 +2,18 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Deal, GameState, PlayerId } from '../engine/types'
-import { applyDeal, undoLastDeal } from '../engine'
+import type { Deal, GameState, PlayerId, Seats } from '../engine/types'
+import {
+  applyDeal,
+  undoLastDeal,
+  recomputeState,
+  freezeGame,
+  isGameFinished as allPoolsClosed,
+  emptyStateFrom,
+  type Rules,
+} from '../engine'
 import { uploadGame, type UploadResult } from '../supabase/sync'
-import { PLAYERS } from '../engine/types'
+import { PLAYERS, zeroScores, zeroWhists } from '../engine/types'
 import { stashOrphan } from './orphans'
 import { setSyncState } from './sync-status'
 
@@ -76,7 +84,7 @@ function scheduleSync(gameId: string, game: GameState) {
 // «не уходит в облако». Единственная разрешённая запись — сам перевод в завершённые
 // (finishGame), он делается пока в облаке ещё finished = false.
 function isGameFinished(g: GameState): boolean {
-  return g.finishedManually === true || PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
+  return g.finishedManually === true || allPoolsClosed(g)
 }
 
 // Связь вернулась — не ждём очередного повтора
@@ -93,8 +101,10 @@ interface Store {
   viewIndex: number | null // локальный курсор просмотра истории (null = смотрим финал). НЕ синхронизируется.
   newGame: (params: {
     players: Record<PlayerId, string>
-    poolLimit: number
+    poolLimit: number | null // null = пуля без предела
     firstHand: PlayerId
+    seats?: Seats // трое или четверо; по умолчанию трое
+    rules?: Rules // конвенции партии; по умолчанию «Дом»
   }) => void
   loadGame: (id: string, game: GameState) => void
   addDeal: (deal: Deal) => void
@@ -102,6 +112,11 @@ interface Store {
   viewNext: () => void // просмотр: вперёд
   viewReset: () => void // сброс просмотра к финалу
   deleteLastDeal: () => void // РЕАЛЬНОЕ удаление последней сдачи (с подтверждением в UI)
+  // Правка и удаление ЛЮБОЙ сдачи в истории. Ошибиться при записи легко —
+  // не тот игрок, не то число взяток, — а раньше исправить можно было только
+  // последнюю. Из-за этого ошибка тащилась до конца партии.
+  editDealAt: (index: number, deal: Deal) => void
+  deleteDealAt: (index: number) => void
   resetGame: () => void
   discardGame: () => void // выбросить текущую партию БЕЗ откладывания в запас
   recalculate: () => void
@@ -111,22 +126,22 @@ interface Store {
 
 const initialGameState = (
   players: Record<PlayerId, string>,
-  poolLimit: number,
+  poolLimit: number | null,
   firstHand: PlayerId,
+  seats: Seats = PLAYERS,
+  rules?: Rules,
 ): GameState => ({
   players,
+  seats,
+  rules,
   poolLimit,
   createdAt: Date.now(),
-  pool: { A: 0, B: 0, C: 0 },
-  mount: { A: 0, B: 0, C: 0 },
-  whists: {
-    A: { A: 0, B: 0, C: 0 },
-    B: { A: 0, B: 0, C: 0 },
-    C: { A: 0, B: 0, C: 0 },
-  },
+  pool: zeroScores(),
+  mount: zeroScores(),
+  whists: zeroWhists(),
   firstHand,
   raspasState: 'normal',
-  eightRaspasCounter: { A: 0, B: 0, C: 0 },
+  eightRaspasCounter: zeroScores(),
   deals: [],
 })
 
@@ -137,11 +152,11 @@ export const useGameStore = create<Store>()(
       gameId: null,
       redoStack: [],
       viewIndex: null,
-      newGame: ({ players, poolLimit, firstHand }) => {
+      newGame: ({ players, poolLimit, firstHand, seats, rules }) => {
         // Текущую партию откладываем про запас — вдруг она ещё не уехала в облако
         stashOrphan(get().gameId, get().game)
         const id = uuid()
-        const game = initialGameState(players, poolLimit, firstHand)
+        const game = initialGameState(players, poolLimit, firstHand, seats, rules)
         set({ game, gameId: id, redoStack: [], viewIndex: null })
         scheduleSync(id, game)
       },
@@ -165,22 +180,7 @@ export const useGameStore = create<Store>()(
         // Пересчитываем state из deals по актуальной логике движка (на случай изменения правил).
         // Загруженный из облака state мог быть с багами — deals[] это единственный источник истины.
         if (game.deals.length > 0) {
-          const initial: GameState = {
-            ...game,
-            pool: { A: 0, B: 0, C: 0 },
-            mount: { A: 0, B: 0, C: 0 },
-            whists: {
-              A: { A: 0, B: 0, C: 0 },
-              B: { A: 0, B: 0, C: 0 },
-              C: { A: 0, B: 0, C: 0 },
-            },
-            firstHand: game.deals[0].firstHand,
-            raspasState: 'normal',
-            eightRaspasCounter: { A: 0, B: 0, C: 0 },
-            deals: [],
-            lastDelta: undefined,
-          }
-          const recalculated = game.deals.reduce(applyDeal, initial)
+          const recalculated = recomputeState(game)
           set({ game: recalculated, gameId: id, redoStack: [], viewIndex: null })
           // Пересчитанный кеш возвращаем в облако — формулы движка могли измениться.
           // Завершённую партию БД менять не даёт, её просто помечаем как сохранённую.
@@ -194,37 +194,69 @@ export const useGameStore = create<Store>()(
         const g = get().game
         if (!g) return
         // Блокируем добавление на завершённой партии или во время просмотра
-        const allClosed = PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
-        if (allClosed || g.finishedManually) return
+        if (isGameFinished(g)) return
         if (get().viewIndex !== null) return
-        const newGame = applyDeal(g, deal)
+        const applied = applyDeal(g, deal)
+        // Пули закрылись этой сдачей — партия окончена, вмораживаем итог,
+        // чтобы будущие изменения формул его уже не трогали.
+        const newGame = isGameFinished(applied) ? freezeGame(applied, Date.now()) : applied
         set({ game: newGame, redoStack: [], viewIndex: null })
         const id = get().gameId
         if (id) scheduleSync(id, newGame)
       },
+      // Просмотр истории. viewIndex — сколько сдач применено, то есть номер
+      // просматриваемой сдачи. null = смотрим текущий момент.
+      //
+      // Границы: от 1 (нулевая позиция — это не сдача, а расстановка перед
+      // игрой) до последней сдачи включительно. Раньше последнюю посмотреть было
+      // нельзя: стрелка «вперёд» с предпоследней прыгала сразу на текущий
+      // момент, а там показана расстановка уже СЛЕДУЮЩЕЙ сдачи. Выглядело так,
+      // будто первая рука перескочила через игрока.
       viewPrev: () => {
         const g = get().game
-        if (!g) return
+        if (!g || g.deals.length === 0) return
         const cur = get().viewIndex ?? g.deals.length
-        const next = Math.max(0, cur - 1)
-        set({ viewIndex: next === g.deals.length ? null : next })
+        set({ viewIndex: Math.max(1, cur - 1) })
       },
       viewNext: () => {
         const g = get().game
-        if (!g) return
+        if (!g || g.deals.length === 0) return
         const cur = get().viewIndex
-        if (cur === null) return // уже на финале
-        const next = cur + 1
-        set({ viewIndex: next >= g.deals.length ? null : next })
+        if (cur === null) return // уже на текущем моменте
+        set({ viewIndex: Math.min(g.deals.length, cur + 1) })
       },
       viewReset: () => set({ viewIndex: null }),
       deleteLastDeal: () => {
         const g = get().game
         if (!g || g.deals.length === 0) return
         // Блокируем на завершённой партии
-        const allClosed = PLAYERS.every((p) => g.pool[p] >= g.poolLimit)
-        if (allClosed || g.finishedManually) return
+        if (isGameFinished(g) || g.frozenAt) return
         const newGame = undoLastDeal(g)
+        set({ game: newGame, viewIndex: null })
+        const id = get().gameId
+        if (id) scheduleSync(id, newGame)
+      },
+      // Заменить сдачу и пересчитать партию с начала. Пересчёт обязателен: сдача
+      // могла изменить и переход хода, и состояние распасов, а значит всё, что
+      // было после неё.
+      editDealAt: (index, deal) => {
+        const g = get().game
+        if (!g || index < 0 || index >= g.deals.length) return
+        if (isGameFinished(g) || g.frozenAt) return
+        const deals = [...g.deals]
+        deals[index] = deal
+        const newGame = recomputeState({ ...g, deals })
+        set({ game: newGame, viewIndex: null })
+        const id = get().gameId
+        if (id) scheduleSync(id, newGame)
+      },
+      deleteDealAt: (index) => {
+        const g = get().game
+        if (!g || index < 0 || index >= g.deals.length) return
+        if (isGameFinished(g) || g.frozenAt) return
+        const deals = g.deals.filter((_, i) => i !== index)
+        const newGame =
+          deals.length === 0 ? emptyStateFrom(g) : recomputeState({ ...g, deals })
         set({ game: newGame, viewIndex: null })
         const id = get().gameId
         if (id) scheduleSync(id, newGame)
@@ -246,7 +278,9 @@ export const useGameStore = create<Store>()(
       finishGame: () => {
         const g = get().game
         if (!g) return
-        const finished: GameState = { ...g, finishedManually: true }
+        // Завершение = заморозка итога. Дальше формулы движка на эту партию
+        // не влияют, сколько бы мы их ни меняли.
+        const finished: GameState = freezeGame({ ...g, finishedManually: true }, Date.now())
         set({ game: finished })
         const id = get().gameId
         if (id) scheduleSync(id, finished)
@@ -277,24 +311,7 @@ export const useGameStore = create<Store>()(
         if (!get().redoStack) set({ redoStack: [] })
         const g = get().game
         if (!g || g.deals.length === 0) return
-        const deals = g.deals
-        const initial: GameState = {
-          ...g,
-          pool: { A: 0, B: 0, C: 0 },
-          mount: { A: 0, B: 0, C: 0 },
-          whists: {
-            A: { A: 0, B: 0, C: 0 },
-            B: { A: 0, B: 0, C: 0 },
-            C: { A: 0, B: 0, C: 0 },
-          },
-          firstHand: deals[0].firstHand,
-          raspasState: 'normal',
-          eightRaspasCounter: { A: 0, B: 0, C: 0 },
-          deals: [],
-          lastDelta: undefined,
-        }
-        const recalculated = deals.reduce(applyDeal, initial)
-        set({ game: recalculated })
+        set({ game: recomputeState(g) })
       },
     }),
     {
@@ -306,22 +323,7 @@ export const useGameStore = create<Store>()(
       // Это гарантирует правильные числа даже при изменениях движка расчёта.
       onRehydrateStorage: () => (state) => {
         if (!state?.game || state.game.deals.length === 0) return
-        const deals = state.game.deals
-        const initial: GameState = {
-          ...state.game,
-          pool: { A: 0, B: 0, C: 0 },
-          mount: { A: 0, B: 0, C: 0 },
-          whists: {
-            A: { A: 0, B: 0, C: 0 },
-            B: { A: 0, B: 0, C: 0 },
-            C: { A: 0, B: 0, C: 0 },
-          },
-          firstHand: deals[0].firstHand,
-          raspasState: 'normal',
-          eightRaspasCounter: { A: 0, B: 0, C: 0 },
-          deals: [],
-        }
-        state.game = deals.reduce(applyDeal, initial)
+        state.game = recomputeState(state.game)
       },
     },
   ),

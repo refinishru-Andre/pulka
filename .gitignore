@@ -1,3 +1,8 @@
+# Секреты: ключи доступа к облаку. НИКОГДА не коммитить.
+.env
+.env.*
+!.env.example
+
 node_modules/
 dist/
 dist-ssr/
@@ -8,3 +13,6 @@ Thumbs.db
 *.log
 .vite/
 *.tsbuildinfo
+
+# Выгрузка партии для разбора — не мусорить в репозитории
+game-dump.json

@@ -3,8 +3,8 @@
 // При изменении локально → upsert в облако. При загрузке — pull всех игр пользователя.
 
 import { supabase } from './client'
-import type { GameState, Deal } from '../engine/types'
-import { applyDeal } from '../engine'
+import type { GameState, Deal, Seats } from '../engine/types'
+import { recomputeState, type Rules } from '../engine'
 
 interface CloudGame {
   id: string
@@ -21,6 +21,13 @@ interface CloudGame {
     eightRaspasCounter: Record<string, number>
     deals: Deal[]
     finishedManually?: boolean
+    // Места за столом. У партий, записанных до появления игры вчетвером,
+    // поля нет — это стол на троих (см. seatsOf).
+    seats?: Seats
+    // Конвенции партии. У партий, записанных раньше, поля нет — тогда «Дом».
+    rules?: Rules
+    // Итог вморожен — не пересчитывать (см. recomputeState)
+    frozenAt?: number
   }
   finished: boolean
   finished_at: string | null
@@ -39,6 +46,9 @@ function toCloudState(game: GameState) {
     eightRaspasCounter: game.eightRaspasCounter,
     deals: game.deals,
     finishedManually: game.finishedManually,
+    seats: game.seats,
+    rules: game.rules,
+    frozenAt: game.frozenAt,
     // lastDelta не сохраняем, он вычисляется
   }
 }
@@ -57,6 +67,9 @@ function fromCloud(cloud: CloudGame): GameState {
     eightRaspasCounter: cloud.state.eightRaspasCounter as GameState['eightRaspasCounter'],
     deals: cloud.state.deals,
     finishedManually: cloud.state.finishedManually,
+    seats: cloud.state.seats,
+    rules: cloud.state.rules,
+    frozenAt: cloud.state.frozenAt,
   }
 }
 
@@ -81,7 +94,8 @@ export async function uploadGame(
   const user = session?.user
   if (!user) return 'guest' // не авторизован — не синхронизируем
 
-  const allClosed = Object.values(game.pool).every((p) => p >= game.poolLimit)
+  const limit = game.poolLimit
+  const allClosed = limit !== null && Object.values(game.pool).every((p) => p >= limit)
   const finished = allClosed || game.finishedManually === true
 
   const payload = {
@@ -133,7 +147,9 @@ export async function fetchGamesResult(): Promise<GamesFetch> {
   const items = (data as CloudGame[]).map((c) => {
     const raw = fromCloud(c)
     // Пересчитываем state из deals — cloud state мог быть с багами старой логики
-    const game = raw.deals.length > 0 ? recomputeState(raw) : raw
+    // Вмороженные партии recomputeState пропускает — с ростом числа партий
+    // это единственное, что не даёт списку тормозить на переигрывании истории.
+    const game = recomputeState(raw)
     return { id: c.id, game, finished: c.finished }
   })
   return { ok: true, items }
@@ -142,26 +158,6 @@ export async function fetchGamesResult(): Promise<GamesFetch> {
 // Короткая форма — когда разница «пусто / нет связи» не важна
 export async function fetchGames(): Promise<{ id: string; game: GameState; finished: boolean }[]> {
   return (await fetchGamesResult()).items
-}
-
-// Пересчитать state из deals[] — гарантирует что pool/mount/whists соответствуют актуальной логике движка
-function recomputeState(game: GameState): GameState {
-  const initial: GameState = {
-    ...game,
-    pool: { A: 0, B: 0, C: 0 },
-    mount: { A: 0, B: 0, C: 0 },
-    whists: {
-      A: { A: 0, B: 0, C: 0 },
-      B: { A: 0, B: 0, C: 0 },
-      C: { A: 0, B: 0, C: 0 },
-    },
-    firstHand: game.deals[0].firstHand,
-    raspasState: 'normal',
-    eightRaspasCounter: { A: 0, B: 0, C: 0 },
-    deals: [],
-    lastDelta: undefined,
-  }
-  return game.deals.reduce(applyDeal, initial)
 }
 
 // Удалить игру

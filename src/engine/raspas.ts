@@ -1,27 +1,49 @@
-// Логика передачи первой руки и переходов состояний распасов
-// См. SPEC.md раздел 5
+// Логика передачи первой руки и переходов состояний распасов.
+// Всё, что тут решается, зависит от конвенций партии (conventions.ts).
 
-import type { Deal, GameState, PlayerId, RaspasState } from './types'
-import { PLAYERS } from './types'
+import type { Deal, GameState, PlayerId, RaspasState, Seats } from './types'
+import { PLAYERS, seatsOf, zeroScores } from './types'
+import type { Rules } from './conventions'
+import { HOME_RULES, rulesOf, ladderAt } from './conventions'
 
-// Следующий игрок по часовой (по порядку A → B → C → A)
-export function nextClockwise(p: PlayerId): PlayerId {
-  const idx = PLAYERS.indexOf(p)
-  return PLAYERS[(idx + 1) % PLAYERS.length]
+// Следующий игрок по часовой. seats — порядок посадки (по умолчанию стол на троих).
+export function nextClockwise(p: PlayerId, seats: Seats = PLAYERS): PlayerId {
+  const idx = seats.indexOf(p)
+  return seats[(idx + 1) % seats.length]
 }
 
-// Определить новую первую руку. Правило Андрея (v2):
-// На 8-мерных распасах рука ОСТАЁТСЯ при ЛЮБОЙ несыгранной заказанной игре/мизере:
-//   - ремиз 8+
-//   - пойманный мизер
-//   - уход без 3 (это тоже несыгранная игра)
-// Во всех остальных случаях (распас, сыгранная игра/мизер) — рука переходит по часовой.
+// Предыдущий по часовой. Сдающий = предыдущий перед первой рукой.
+export function prevClockwise(p: PlayerId, seats: Seats = PLAYERS): PlayerId {
+  const idx = seats.indexOf(p)
+  return seats[(idx - 1 + seats.length) % seats.length]
+}
+
+// Была ли игра завистована — хоть кто-то не спасовал.
+// Нужно там, где выход из распасов даёт только завистованная игра: тогда
+// «8 пик — пас — пас» распасы не гасит, хотя формально сыграна.
+function wasVisted(deal: Extract<Deal, { type: 'game' }>, seats: Seats): boolean {
+  return seats.some((p) => p !== deal.player && deal.vistDecisions[p] && deal.vistDecisions[p] !== 'pass')
+}
+
+// Определить новую первую руку.
+//
+// По умолчанию сдача идёт по часовой, что бы ни случилось (так в ФСПР 6.5).
+// Домашняя конвенция добавляет исключение: на восьмерных распасах рука ОСТАЁТСЯ
+// при любой НЕСЫГРАННОЙ игре.
+//
+// Несыгранная игра — это любой невыполненный заказ (формулировка Андрея):
+//   — заказал восьмерную и выше, но не взял свои взятки;
+//   — заказал мизер и его поймали;
+//   — ушёл без трёх: заказ ведь тоже не выполнен.
+// Правило одинаково втроём и вчетвером.
 export function nextFirstHand(
   state: GameState,
   deal: Deal,
   _newRaspasState: RaspasState,
 ): PlayerId {
-  if (state.raspasState === 'eightRaspas') {
+  const rules = rulesOf(state)
+  const seats = seatsOf(state)
+  if (rules.firstHandStaysOnFailedHighGame && state.raspasState === 'eightRaspas') {
     if (
       deal.type === 'game' &&
       deal.contract.kind === 'game' &&
@@ -37,38 +59,44 @@ export function nextFirstHand(
       return state.firstHand
     }
   }
-  return nextClockwise(state.firstHand)
+  return nextClockwise(state.firstHand, seats)
 }
 
 // Определить новое состояние распасов после сдачи
 export function nextRaspasState(state: GameState, deal: Deal): RaspasState {
-  // Распас увеличивает уровень
+  const rules = rulesOf(state)
+  const seats = seatsOf(state)
+
+  // Распас поднимает эскалацию на ступень.
+  //
+  // ВАЖНО: второй распас сразу выводит на 8-мерные. Раньше между ними жило
+  // лишнее состояние «после 2-го распаса» с тем же минимумом 8 и той же ценой
+  // взятки 6 — оно отличалось ТОЛЬКО тем, что там не работало правило «рука
+  // остаётся». За столом такого различия нет: как только минимум стал 8, вы уже
+  // на восьмерных. Из-за этой лишней ступени 26.08.2026 на 35-й сдаче рука ушла,
+  // хотя Олег заказал восьмерную и ушёл без трёх, и она должна была остаться.
   if (deal.type === 'raspas') {
     if (state.raspasState === 'normal') return 'afterFirst'
-    if (state.raspasState === 'afterFirst') return 'afterSecond'
-    if (state.raspasState === 'afterSecond') return 'eightRaspas'
-    return 'eightRaspas' // остаёмся в 8-мерных при повторном распасе
+    return 'eightRaspas'
   }
 
-  // Игра — любая УСПЕШНО сыгранная возвращает в normal.
-  // Ремиз — состояние не меняется (остаёмся в эскалации).
   if (deal.type === 'game') {
     if (deal.contract.kind !== 'game') return state.raspasState
     const success = deal.playerTricks >= deal.contract.level
-    if (success) return 'normal'
-    return state.raspasState
+    if (!success) return state.raspasState // подсадом из распасов не выходят
+    // Конвенция ФСПР: выход даёт только ЗАВИСТОВАННАЯ сыгранная игра
+    if (rules.exitRequiresVisted && !wasVisted(deal, seats)) return state.raspasState
+    return 'normal'
   }
+
   if (deal.type === 'misere') {
-    // Мизер сыгран или пойман — сброс в normal? Да (см. SPEC.md, разумно по умолчанию)
-    if (deal.playerTricks === 0) return 'normal' // сыгран
-    // Пойман — по правилам Андрея на 8-мерных первая рука остаётся, а состояние не сбрасывается
-    if (state.raspasState === 'eightRaspas') return 'eightRaspas'
+    // Дома сыгранный мизер гасит распасы. В ФСПР — нет: мизер не вистуется в
+    // принципе, а выход даёт только завистованная игра.
+    if (rules.misereBreaksRaspas && deal.playerTricks === 0) return 'normal'
     return state.raspasState
   }
-  if (deal.type === 'giveup') {
-    // Уход без 3 — не сбрасывает состояние
-    return state.raspasState
-  }
+
+  // Уход без 3 и ручная корректировка состояние не меняют
   return state.raspasState
 }
 
@@ -78,13 +106,19 @@ export function updateEightCounter(
   newRaspasState: RaspasState,
   oldFirstHand: PlayerId,
 ): Record<PlayerId, number> {
-  // Если мы только-только вошли в 8-мерные — обнуляем счётчик и ставим 1 для входящей руки
+  // Только что вошли в 8-мерные — счётчик пустой.
+  //
+  // Сдачу, которая ПРИВЕЛА на восьмерные, засчитывать нельзя: она игралась ещё
+  // по прежней цене и к режиму не относится. Раньше её первой руке ставили
+  // единицу, и круг мог замкнуться при том, что человек на восьмерных первой
+  // рукой так и не сидел. В партии 26.08.2026 так и вышло: круг закрылся, хотя
+  // Олег своё на восьмерных не отсидел.
   if (state.raspasState !== 'eightRaspas' && newRaspasState === 'eightRaspas') {
-    return { A: 0, B: 0, C: 0, [oldFirstHand]: 1 } as Record<PlayerId, number>
+    return zeroScores()
   }
   // Если мы вышли из 8-мерных — обнуляем
   if (state.raspasState === 'eightRaspas' && newRaspasState !== 'eightRaspas') {
-    return { A: 0, B: 0, C: 0 }
+    return zeroScores()
   }
   // Продолжаем в 8-мерных — увеличиваем счётчик первой руки
   if (state.raspasState === 'eightRaspas' && newRaspasState === 'eightRaspas') {
@@ -94,25 +128,46 @@ export function updateEightCounter(
 }
 
 // Проверить: пройден ли «полный круг» на 8-мерных (все ≥ 1)
-export function isEightRaspasFullCircle(counter: Record<PlayerId, number>): boolean {
-  return PLAYERS.every((p) => counter[p] >= 1)
+export function isEightRaspasFullCircle(
+  counter: Record<PlayerId, number>,
+  seats: Seats = PLAYERS,
+): boolean {
+  return seats.every((p) => counter[p] >= 1)
 }
 
-// Минимальный заказ по состоянию
-export function minBidFor(raspasState: RaspasState): number {
+// На какой ступени лесенки мы находимся: 0 = обычная игра, дальше по числу
+// пройденных распасов.
+function ladderStep(raspasState: RaspasState): number {
   switch (raspasState) {
     case 'normal':
-      return 6
+      return 0
     case 'afterFirst':
-      return 7
+      return 1
     case 'afterSecond':
-      return 8
+      return 2
     case 'eightRaspas':
-      return 8
+      return 3
   }
 }
 
-// Уровень распаса для новой раздачи (если все спасовали)
+// Минимальный заказ по состоянию.
+// Дом: 6 → 7 → 8 и дальше 8. ФСПР: 6 → 7 и дальше 7 («выход затруднённый»).
+export function minBidFor(raspasState: RaspasState, rules: Rules = HOME_RULES): number {
+  return ladderAt(rules.minBidLadder, ladderStep(raspasState))
+}
+
+// Цена взятки на распасе в текущем состоянии: 2 → 4 → 6 и дальше 6
+export function raspasCostFor(raspasState: RaspasState, rules: Rules = HOME_RULES): number {
+  return ladderAt(rules.raspasCostLadder, ladderStep(raspasState))
+}
+
+// Уровень распаса для новой раздачи (если все спасовали).
+//
+// Как это называется за столом (термины Андрея):
+//   уровень 1 — ШЕСТЕРНОЙ распас, взятка 2, после него минимум 7
+//   уровень 2 — СЕМЕРНОЙ распас,  взятка 4, после него минимум 8
+//   уровень 3 — ВОСЬМЕРНОЙ распас, взятка 6, минимум остаётся 8
+// То есть восьмерные начинаются ПОСЛЕ СЕМЕРНОГО распаса, а не после восьмерного.
 export function raspasLevelFor(raspasState: RaspasState): 1 | 2 | 3 {
   switch (raspasState) {
     case 'normal':
@@ -122,5 +177,33 @@ export function raspasLevelFor(raspasState: RaspasState): 1 | 2 | 3 {
     case 'afterSecond':
     case 'eightRaspas':
       return 3
+  }
+}
+
+// Как распас называется за столом. Уровень — это не порядковый номер, а заказ,
+// от которого играют дальше: шестерной поднимает минимум до 7, семерной до 8,
+// восьмерной оставляет 8.
+export const RASPAS_LEVEL_NAME: Record<1 | 2 | 3, string> = {
+  1: 'шестерной',
+  2: 'семерной',
+  3: 'восьмерной',
+}
+
+// Подпись текущего состояния для экрана. Говорит две вещи: от чего заказывать
+// и действует ли особое правило восьмерных.
+export function raspasStateLabel(raspasState: RaspasState, rules: Rules = HOME_RULES): string {
+  const min = minBidFor(raspasState, rules)
+  switch (raspasState) {
+    case 'normal':
+      return `Обычная игра · заказ от ${min}`
+    case 'afterFirst':
+      return `После шестерного распаса · заказ от ${min}`
+    case 'afterSecond':
+      // Старое состояние, в новых партиях не возникает — оставлено для истории
+      return `После семерного распаса · заказ от ${min}`
+    case 'eightRaspas':
+      return rules.firstHandStaysOnFailedHighGame
+        ? `Восьмерные распасы · заказ от ${min} · рука остаётся при несыгранной`
+        : `Восьмерные распасы · заказ от ${min}`
   }
 }
