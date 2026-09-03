@@ -12,8 +12,8 @@ import {
 import { importFromGames } from '../supabase/people'
 import { getCodeHint, clearCodeHint } from '../supabase/auth'
 import { settle } from '../engine'
+import { seatsOf } from '../engine/types'
 import type { GameState } from '../engine/types'
-import { PLAYERS } from '../engine/types'
 
 interface CloudGameItem {
   id: string
@@ -212,9 +212,12 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
                   className="bg-slate-800 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap"
                 >
                   <div>
-                    <div className="font-bold">{PLAYERS.map((p) => o.game.players[p]).join(' · ')}</div>
+                    <div className="font-bold">
+                      {seatsOf(o.game).map((p) => o.game.players[p]).join(' · ')}
+                    </div>
                     <div className="text-sm text-slate-400">
-                      Пуля до {o.game.poolLimit} · сдач: {o.game.deals.length} ·{' '}
+                      {o.game.poolLimit === null ? 'Пуля без предела' : `Пуля до ${o.game.poolLimit}`} ·
+                      сдач: {o.game.deals.length} ·{' '}
                       {new Date(o.game.createdAt).toLocaleString('ru')}
                     </div>
                     {cloudDeals.has(o.id) && (
@@ -225,6 +228,19 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
                     )}
                   </div>
                   <div className="flex gap-2">
+                    {/* Продолжить партию, которая ещё не уехала в облако.
+                        Раньше её можно было только загрузить или выбросить, и
+                        при отказе облака человек оставался запертым: партия на
+                        устройстве есть, а доиграть нельзя. */}
+                    <button
+                      onClick={() => {
+                        loadGame(o.id, o.game)
+                        onOpenGame()
+                      }}
+                      className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-slate-900 rounded-lg font-bold"
+                    >
+                      ▶ Продолжить
+                    </button>
                     <button
                       onClick={() => handleUploadOrphan(o)}
                       disabled={busyId === o.id}
@@ -268,7 +284,7 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
                     <div>
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-lg font-bold">
-                          {PLAYERS.map((p) => g.players[p]).join(' · ')}
+                          {seatsOf(g).map((p) => g.players[p]).join(' · ')}
                         </span>
                         {item.finished ? (
                           <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">
@@ -300,8 +316,12 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 mt-3">
-                    {PLAYERS.map((p) => (
+                  <div
+                    className={`grid gap-3 mt-3 ${
+                      seatsOf(g).length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'
+                    }`}
+                  >
+                    {seatsOf(g).map((p) => (
                       <div key={p} className="bg-slate-900 rounded-lg px-3 py-2 text-center">
                         <div className="text-xs text-slate-500 truncate">{g.players[p]}</div>
                         <div
