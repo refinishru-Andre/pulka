@@ -12,6 +12,7 @@ import {
   raspasStateLabel,
   RASPAS_LEVEL_NAME,
   gameResultText,
+  dealBreakdown,
 } from '../engine'
 import { zeroWhists, seatsOf } from '../engine/types'
 import type { PlayerId, GameState } from '../engine/types'
@@ -184,7 +185,14 @@ export function Table({ onBack }: Props = {}) {
       )
       lines.push(`Причина: ${lastDeal.note}`)
     }
-    // Расчёт
+    // Откуда взялась каждая цифра — разбор по правилам партии
+    const why = dealBreakdown(lastDeal, seats, rulesOf(viewed), game.players)
+    if (why.length > 0) {
+      lines.push('')
+      why.forEach((l) => lines.push(l))
+    }
+
+    // Итоговые изменения
     lines.push('') // разделитель
     seats.forEach((p) => {
       const changes: string[] = []

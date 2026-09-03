@@ -7,6 +7,7 @@ import { calcDeal } from './calc'
 import { applyDeal } from './index'
 import { nextRaspasState, nextFirstHand, minBidFor } from './raspas'
 import { settle } from './settle'
+import { dealBreakdown } from './report'
 import { HOME_RULES, FSPR_RULES } from './conventions'
 import type { Deal, GameState, PlayerId } from './types'
 import { PLAYERS, zeroScores, zeroWhists } from './types'
@@ -485,5 +486,68 @@ describe('Мини-партия вчетвером по турнирным пр�
     // Итог сходится: сумма балансов всех четверых равна нулю
     const net = settle(g).net
     expect(net.A + net.B + net.C + net.D).toBe(0)
+  })
+})
+
+describe('Разбор сдачи: откуда взялась каждая цифра', () => {
+  const names = { A: 'Олег', B: 'Андрей', C: 'Дмитрий', D: '' } as Record<PlayerId, string>
+
+  it('объясняет джентльменский дележ и премию за прикуп втроём', () => {
+    // Живая сдача из турнирной партии 03.09.2026: Олег сыграл семерную,
+    // Андрей вистовал и взял 3, Дмитрий пасовал, в прикупе туз с королём.
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'B',
+      firstHand: 'C',
+      player: 'A',
+      contract: { kind: 'game', level: 7 },
+      playerTricks: 7,
+      vistDecisions: { B: 'vist', C: 'pass' },
+      vistersTricks: { B: 3, C: 0 },
+      prikupFastTricks: 2,
+    }
+    const lines = dealBreakdown(deal, PLAYERS, FSPR_RULES, names).join(' | ')
+    expect(lines).toContain('пуля +4')
+    expect(lines).toContain('3 × 8 = 24')
+    expect(lines).toContain('по 12 каждому')
+    expect(lines).toContain('2 быстрые взятки × 8 = 16')
+    expect(lines).toContain('Андрей 8, Дмитрий 8')
+  })
+
+  it('объясняет подсад: гору играющего и консоляцию', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'B',
+      firstHand: 'C',
+      player: 'A',
+      contract: { kind: 'game', level: 6 },
+      playerTricks: 5,
+      vistDecisions: { B: 'vist', C: 'pass' },
+      vistersTricks: { B: 5, C: 0 },
+    }
+    const lines = dealBreakdown(deal, PLAYERS, FSPR_RULES, names).join(' | ')
+    expect(lines).toContain('сел без 1')
+    expect(lines).toContain('гора +4')
+    expect(lines).toContain('по 10 каждому')
+    expect(lines).toContain('Консоляция за подсад: 1 × 4 = 4 каждому')
+  })
+
+  it('вчетвером премию пишет сдатчик целиком', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'D',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 7 },
+      playerTricks: 7,
+      vistDecisions: { B: 'vist', C: 'vist' },
+      vistersTricks: { B: 2, C: 1 },
+      prikupFastTricks: 2,
+    }
+    const lines = dealBreakdown(deal, SEATS4, FSPR_RULES, {
+      ...names,
+      D: 'Гость',
+    }).join(' | ')
+    expect(lines).toContain('пишет сдатчик, Гость')
   })
 })
