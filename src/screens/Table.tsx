@@ -286,6 +286,20 @@ export function Table({ onBack }: Props = {}) {
           {/* Правка любой сдачи. Ошибиться при записи легко — не тот игрок,
               не то число взяток. Раньше поправить можно было только последнюю,
               и ошибка тащилась до конца партии. */}
+          {/* Правка последней сдачи прямо с текущего момента: чаще всего ошибку
+              замечают сразу после записи, и гонять человека в историю незачем. */}
+          {!viewingHistory && !isFinished && game.deals.length > 0 && (
+            <button
+              onClick={() => {
+                setEditIndex(game.deals.length - 1)
+                setDealFormOpen(true)
+              }}
+              className="px-4 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-base font-semibold"
+              title="Исправить только что записанную сдачу"
+            >
+              ✏️ Исправить сдачу {game.deals.length}
+            </button>
+          )}
           {viewingHistory && !isFinished && viewIndex! > 0 && (
             <>
               <button
