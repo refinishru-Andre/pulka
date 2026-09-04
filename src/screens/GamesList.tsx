@@ -19,6 +19,7 @@ interface CloudGameItem {
   id: string
   game: GameState
   finished: boolean
+  finishedAt: string | null
 }
 
 interface Props {
@@ -26,6 +27,19 @@ interface Props {
   onNewGame: () => void
   onOpenStats: () => void
   onOpenCalc: () => void
+}
+
+// Когда партия шла. В списке всегда показывалось только время НАЧАЛА, и оно не
+// сходилось с тем, что человек помнит: «мы закончили в восемь».
+function gameTimeLabel(createdAt: number, finishedAt: string | null): string {
+  const start = new Date(createdAt)
+  const d = start.toLocaleDateString('ru')
+  const t = (x: Date) => x.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' })
+  if (!finishedAt) return `${d}, начата ${t(start)}`
+  const end = new Date(finishedAt)
+  const mins = Math.round((end.getTime() - start.getTime()) / 60000)
+  const dur = mins >= 60 ? `${Math.floor(mins / 60)} ч ${mins % 60} мин` : `${mins} мин`
+  return `${d}, ${t(start)} — ${t(end)} · ${dur}`
 }
 
 export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Props) {
@@ -60,8 +74,10 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
     return found.sort((a, b) => b.savedAt - a.savedAt)
   }
 
-  const refresh = async () => {
-    setLoading(true)
+  // silent — автообновление в фоне: не мигаем индикатором загрузки.
+  // Раньше список каждые 15 секунд перерисовывался целиком, и экран моргал.
+  const refresh = async (silent = false) => {
+    if (!silent) setLoading(true)
     const res = await fetchGamesResult()
     setGames(res.items)
     // Считаем «потеряшки» только когда облако реально ответило
@@ -113,7 +129,7 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
       await refresh()
     })()
     // Автообновление каждые 15 сек — на случай если игра идёт на другом устройстве
-    const interval = window.setInterval(refresh, 15000)
+    const interval = window.setInterval(() => refresh(true), 15000)
     return () => window.clearInterval(interval)
   }, [])
 
@@ -154,7 +170,7 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
           </div>
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={refresh}
+              onClick={() => refresh()}
               disabled={loading}
               className="px-5 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base"
               title="Обновить список партий"
@@ -298,7 +314,7 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
                       </div>
                       <div className="text-sm text-slate-400">
                         Пуля до {g.poolLimit} · сдач: {g.deals.length} ·{' '}
-                        {new Date(g.createdAt).toLocaleString('ru')}
+                        {gameTimeLabel(g.createdAt, item.finishedAt)}
                       </div>
                     </div>
                     <div className="flex gap-2">

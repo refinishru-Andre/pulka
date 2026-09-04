@@ -132,7 +132,7 @@ export async function uploadGame(
 
 export interface GamesFetch {
   ok: boolean // false = не смогли достучаться до облака (нет связи / не залогинен)
-  items: { id: string; game: GameState; finished: boolean }[]
+  items: { id: string; game: GameState; finished: boolean; finishedAt: string | null }[]
 }
 
 // Загрузить все игры пользователя из облака.
@@ -157,7 +157,7 @@ export async function fetchGamesResult(): Promise<GamesFetch> {
     // Вмороженные партии recomputeState пропускает — с ростом числа партий
     // это единственное, что не даёт списку тормозить на переигрывании истории.
     const game = recomputeState(raw)
-    return { id: c.id, game, finished: c.finished }
+    return { id: c.id, game, finished: c.finished, finishedAt: c.finished_at }
   })
   return { ok: true, items }
 }
