@@ -150,14 +150,14 @@ export function dealBreakdown(
     )
   }
 
-  // Премия за быстрые взятки в прикупе
+  // Висты за прикуп (в кодексе — премия за «быстрые взятки»)
   const fast = deal.prikupFastTricks ?? 0
   if (rules.prikupBonus && fast > 0) {
     const pot = fast * perTrick
-    const word = fast === 1 ? 'быстрая взятка' : 'быстрые взятки'
+    const word = fast === 1 ? 'взятку' : 'взятки'
     if (fourHanded) {
       lines.push(
-        `Прикуп: ${fast} ${word} × ${perTrick} = ${pot} — пишет сдатчик, ${who(deal.dealer)}, на играющего.`,
+        `Висты за прикуп (за ${fast} ${word}): ${fast} × ${perTrick} = ${pot} — пишет сдатчик, ${who(deal.dealer)}, на играющего.`,
       )
     } else {
       // Втроём премию пишут ОБА соперника по половине, независимо от того, кто
@@ -165,7 +165,7 @@ export function dealBreakdown(
       const opponents = seats.filter((p) => p !== deal.player)
       const each = pot / opponents.length
       lines.push(
-        `Прикуп: ${fast} ${word} × ${perTrick} = ${pot}. Втроём делится между соперниками: ` +
+        `Висты за прикуп (за ${fast} ${word}): ${fast} × ${perTrick} = ${pot}. Втроём делится между соперниками: ` +
           opponents.map((p) => `${who(p)} ${each}`).join(', ') +
           ' — на играющего.',
       )

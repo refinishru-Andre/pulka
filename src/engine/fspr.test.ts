@@ -176,7 +176,7 @@ describe('ФСПР: распасы пишутся за каждую взятку
   })
 })
 
-describe('ФСПР: премия за быстрые взятки в прикупе', () => {
+describe('ФСПР: висты за прикуп', () => {
   it('вчетвером её пишет сдатчик на играющего целиком', () => {
     const deal: Deal = {
       type: 'game',
@@ -510,7 +510,7 @@ describe('Разбор сдачи: откуда взялась каждая ци
     expect(lines).toContain('пуля +4')
     expect(lines).toContain('3 × 8 = 24')
     expect(lines).toContain('по 12 каждому')
-    expect(lines).toContain('2 быстрые взятки × 8 = 16')
+    expect(lines).toContain('Висты за прикуп (за 2 взятки): 2 × 8 = 16')
     expect(lines).toContain('Андрей 8, Дмитрий 8')
   })
 
