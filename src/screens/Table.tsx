@@ -236,13 +236,13 @@ export function Table({ onBack }: Props = {}) {
             <span>{game.poolLimit === null ? 'Пуля без предела' : `Пуля до ${game.poolLimit}`}</span>
             <span>·</span>
             <span>
-              сдач: {viewingHistory ? `${viewIndex}/${game.deals.length}` : game.deals.length}
+              сдач: {viewingHistory ? viewIndex : game.deals.length}/{game.deals.length}
             </span>
-            {viewingHistory && (
-              <span className="text-yellow-400 font-semibold">
-                (просмотр истории — не текущий момент)
-              </span>
-            )}
+            <span
+              className={`text-yellow-400 font-semibold ${viewingHistory ? '' : 'invisible'}`}
+            >
+              (просмотр истории — не текущий момент)
+            </span>
             <span>·</span>
             {(() => {
               if (isFinished && !viewingHistory) {
@@ -314,7 +314,7 @@ export function Table({ onBack }: Props = {}) {
             className="px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 disabled:bg-slate-700 rounded-lg text-base font-semibold"
             title="Исправить эту сдачу — партия пересчитается с неё"
           >
-            ✏️ Исправить{editableIndex !== null ? ` ${editableIndex + 1}` : ''}
+            ✏️ Исправить сдачу
           </button>
           <button
             onClick={() => {
@@ -327,12 +327,12 @@ export function Table({ onBack }: Props = {}) {
               }
             }}
             disabled={editableIndex === null}
-            className={`px-4 py-3 rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
+            className={`px-4 py-3 min-w-[190px] rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
               confirmDeleteDeal ? 'bg-red-600 hover:bg-red-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
             }`}
             title="Убрать эту сдачу из партии"
           >
-            {confirmDeleteDeal ? 'Точно удалить?' : `🗑 Удалить${editableIndex !== null ? ` ${editableIndex + 1}` : ''}`}
+            {confirmDeleteDeal ? 'Точно удалить?' : '🗑 Удалить сдачу'}
           </button>
           <button
             onClick={() => {
@@ -345,7 +345,7 @@ export function Table({ onBack }: Props = {}) {
               }
             }}
             disabled={isFinished || viewingHistory}
-            className={`px-5 py-3 rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
+            className={`px-5 py-3 min-w-[230px] rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
               confirmFinish ? 'bg-amber-600 hover:bg-amber-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
             }`}
             title="Зафиксировать итог на текущий момент. Пуля закрыта или нет — неважно: считаем по последней сдаче. После расчёта партия не меняется."
@@ -361,7 +361,7 @@ export function Table({ onBack }: Props = {}) {
                 setConfirmReset(true)
               }
             }}
-            className={`px-5 py-3 rounded-lg text-base font-semibold ${
+            className={`px-5 py-3 min-w-[260px] rounded-lg text-base font-semibold ${
               confirmReset ? 'bg-red-600 hover:bg-red-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
             }`}
             title="Текущая партия останется незавершённой в списке — её можно открыть и доиграть позже."
