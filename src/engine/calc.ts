@@ -44,7 +44,6 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
   const player = deal.player
   const vs = visters(deal, seats)
 
-  const vTricksTotal = vs.reduce((sum, v) => sum + (deal.vistersTricks[v] ?? 0), 0)
   const playerTricks = deal.playerTricks
 
   // СТАРЫЕ СДАЧИ. Признак 6♠ (Сталинград) больше не записывается: мы храним итог
@@ -59,32 +58,33 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
     ? { ...deal.vistDecisions, ...Object.fromEntries(vs.map((v) => [v, 'vist' as const])) }
     : deal.vistDecisions
 
-  // СПЕЦ-СЛУЧАЙ 1: все вистующие пасовали → игра автомат, без розыгрыша
-  const allPassed = vs.every((v) => effectiveDecisions[v] === 'pass')
-  if (allPassed) {
-    delta.pool[player] += rules.poolCost[level]
-    return delta
-  }
-
-  // СПЕЦ-СЛУЧАЙ 2: один пас + один полвиста → автомат.
-  // Играющему пуля, полвистовому — половина нормы пары в вистах.
-  const halfPlayer = vs.find((v) => effectiveDecisions[v] === 'half')
-  const passPlayerForHalf = vs.find((v) => effectiveDecisions[v] === 'pass')
-  if (halfPlayer && passPlayerForHalf && rules.halfVistLevels.includes(level)) {
-    delta.pool[player] += rules.poolCost[level]
+  // ПОЛВИСТА — фиксированная плата, из розыгрыша человек выбывает.
+  //
+  // «Полвиста» значит половину нормы пары: на шестерной норма 4, значит 2 взятки;
+  // на семерной норма 2, значит 1. Спрашивать у него число взяток бессмысленно —
+  // он не играет (замечание Андрея, 04.09.2026). Кодекс ФСПР 6.6 допускает уход
+  // за полвиста только на 6 и 7, поэтому и halfVistLevels такие.
+  const halfPlayers = vs.filter(
+    (v) => effectiveDecisions[v] === 'half' && rules.halfVistLevels.includes(level),
+  )
+  halfPlayers.forEach((h) => {
     const tricks = halfVistTricks(rules, level)
     if (tricks > 0) {
-      delta.whists.push({
-        from: halfPlayer,
-        to: player,
-        amount: tricks * rules.vistPerTrick[level],
-      })
+      delta.whists.push({ from: h, to: player, amount: tricks * rules.vistPerTrick[level] })
     }
+  })
+
+  // Остальные защитники — те, кто реально сел играть
+  const rest = vs.filter((v) => !halfPlayers.includes(v))
+  const activeVisters = rest.filter((v) => effectiveDecisions[v] !== 'pass')
+  const vTricksTotal = rest.reduce((sum, v) => sum + (deal.vistersTricks[v] ?? 0), 0)
+
+  // Играть некому — игра автоматом, без розыгрыша
+  if (activeVisters.length === 0) {
+    delta.pool[player] += rules.poolCost[level]
+    addPrikupBonus(delta, deal, seats, rules, level)
     return delta
   }
-
-  // Кто вистовал полноценно (не пас, включая полвиста)
-  const activeVisters = vs.filter((v) => effectiveDecisions[v] !== 'pass')
 
   const success = playerTricks >= level
   const duty = rules.vistersDuty[level]
@@ -106,11 +106,11 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
   //
   // Если вистуют ОБА, делить нечего: каждый пишет свои взятки, и оба стиля дают
   // одно и то же.
-  const someonePassed = activeVisters.length < vs.length
+  const someonePassed = activeVisters.length < rest.length
   if (rules.vistStyle === 'gentleman' && someonePassed && activeVisters.length > 0) {
-    const share = vTricksTotal / vs.length
+    const share = vTricksTotal / rest.length
     if (share > 0) {
-      vs.forEach((v) => delta.whists.push({ from: v, to: player, amount: share * perTrick }))
+      rest.forEach((v) => delta.whists.push({ from: v, to: player, amount: share * perTrick }))
     }
   } else if (activeVisters.length === 1) {
     // Один вистует за всю пару — ему все взятки пары
@@ -177,7 +177,7 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
     if (rules.consolation) {
       const consolation = shortfall * perTrick
       if (consolation > 0) {
-        const receivers = new Set<PlayerId>(vs)
+        const receivers = new Set<PlayerId>(rest)
         if (rules.consolationToDealer && seats.length === 4) receivers.add(deal.dealer)
         receivers.forEach((v) => {
           if (v !== player) delta.whists.push({ from: v, to: player, amount: consolation })

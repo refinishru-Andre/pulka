@@ -54,7 +54,6 @@ export function Table({ onBack }: Props = {}) {
   const viewPrev = useGameStore((s) => s.viewPrev)
   const viewNext = useGameStore((s) => s.viewNext)
   const viewReset = useGameStore((s) => s.viewReset)
-  const deleteLastDeal = useGameStore((s) => s.deleteLastDeal)
   const deleteDealAt = useGameStore((s) => s.deleteDealAt)
   const resetGame = useGameStore((s) => s.resetGame)
   const finishGame = useGameStore((s) => s.finishGame)
@@ -66,7 +65,6 @@ export function Table({ onBack }: Props = {}) {
   const [copied, setCopied] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Кто за столом: трое или четверо. Читаем из партии, а не из константы.
   const seats = seatsOf(game)
@@ -80,6 +78,18 @@ export function Table({ onBack }: Props = {}) {
     if (!viewingHistory) return game
     return replayTo(game, viewIndex!)
   }, [game, viewIndex, viewingHistory])
+
+  // Какую сдачу сейчас можно править: просматриваемую, а на текущем моменте —
+  // последнюю записанную. null — править нечего.
+  const editableIndex: number | null = isFinished
+    ? null
+    : viewingHistory
+      ? viewIndex! > 0
+        ? viewIndex! - 1
+        : null
+      : game.deals.length > 0
+        ? game.deals.length - 1
+        : null
 
   // Первая рука ТОЙ сдачи, которую смотрим. Состояние `viewed` — это уже ПОСЛЕ
   // неё, то есть расстановка для следующей. Пока смотришь прошлое, показывать
@@ -257,19 +267,24 @@ export function Table({ onBack }: Props = {}) {
             <SyncBadge />
           </div>
         </div>
+        {/* Ряд кнопок с ПОСТОЯННЫМ составом.
+            Раньше кнопки появлялись и исчезали по обстановке, и весь ряд ехал:
+            нажал «◀ Сдача», кнопки сдвинулись, второй клик попадал уже в другую.
+            Теперь набор всегда один и тот же, неподходящие просто гаснут.
+            Подтверждение тоже не добавляет кнопок — оно на той же кнопке,
+            вторым нажатием. */}
         <div className="flex gap-2 flex-wrap">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-            >
-              ← К партиям
-            </button>
-          )}
+          <button
+            onClick={onBack}
+            disabled={!onBack}
+            className="px-5 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-base font-semibold"
+          >
+            ← К партиям
+          </button>
           <button
             onClick={viewPrev}
             disabled={viewIndex === 1 || game.deals.length === 0}
-            className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
+            className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-base font-semibold"
             title="Посмотреть предыдущую сдачу"
           >
             ◀ Сдача
@@ -277,165 +292,82 @@ export function Table({ onBack }: Props = {}) {
           <button
             onClick={viewNext}
             disabled={!viewingHistory || viewIndex === game.deals.length}
-            className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
+            className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-base font-semibold"
             title="Посмотреть следующую сдачу"
           >
             Сдача ▶
           </button>
-          {viewingHistory && (
-            <button
-              onClick={viewReset}
-              className="px-4 py-3 bg-yellow-600 hover:bg-yellow-500 rounded-lg text-base font-semibold"
-              title="К текущему моменту"
-            >
-              ⤓ К текущей
-            </button>
-          )}
-          {/* Правка любой сдачи. Ошибиться при записи легко — не тот игрок,
-              не то число взяток. Раньше поправить можно было только последнюю,
-              и ошибка тащилась до конца партии. */}
-          {/* Правка последней сдачи прямо с текущего момента: чаще всего ошибку
-              замечают сразу после записи, и гонять человека в историю незачем. */}
-          {!viewingHistory && !isFinished && game.deals.length > 0 && (
-            <button
-              onClick={() => {
-                setEditIndex(game.deals.length - 1)
-                setDealFormOpen(true)
-              }}
-              className="px-4 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-base font-semibold"
-              title="Исправить только что записанную сдачу"
-            >
-              ✏️ Исправить сдачу {game.deals.length}
-            </button>
-          )}
-          {viewingHistory && !isFinished && viewIndex! > 0 && (
-            <>
-              <button
-                onClick={() => {
-                  setEditIndex(viewIndex! - 1)
-                  setDealFormOpen(true)
-                }}
-                className="px-4 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-base font-semibold"
-                title="Исправить эту сдачу — партия пересчитается с неё"
-              >
-                ✏️ Исправить сдачу {viewIndex}
-              </button>
-              {confirmDeleteDeal ? (
-                <>
-                  <button
-                    onClick={() => {
-                      deleteDealAt(viewIndex! - 1)
-                      setConfirmDeleteDeal(false)
-                    }}
-                    className="px-4 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-base font-bold"
-                  >
-                    Точно удалить?
-                  </button>
-                  <button
-                    onClick={() => setConfirmDeleteDeal(false)}
-                    className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-                  >
-                    Нет
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setConfirmDeleteDeal(true)}
-                  className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-                  title="Убрать эту сдачу из партии"
-                >
-                  🗑 Удалить сдачу {viewIndex}
-                </button>
-              )}
-            </>
-          )}
-          {!isFinished && !viewingHistory && (
-            confirmDelete ? (
-              <>
-                <button
-                  onClick={() => {
-                    deleteLastDeal()
-                    setConfirmDelete(false)
-                  }}
-                  className="px-4 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-base font-bold"
-                  title="Удалить последнюю сдачу навсегда"
-                >
-                  Удалить?
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-                >
-                  Нет
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                disabled={game.deals.length === 0}
-                className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base font-semibold"
-                title="Удалить последнюю сдачу (нельзя отменить)"
-              >
-                🗑 Удалить сдачу
-              </button>
-            )
-          )}
-          {!isFinished && !viewingHistory &&
-            (confirmFinish ? (
-              <>
-                <button
-                  onClick={() => {
-                    finishGame()
-                    setConfirmFinish(false)
-                    onBack?.()
-                  }}
-                  className="px-5 py-3 bg-amber-600 hover:bg-amber-500 rounded-lg text-base font-bold"
-                >
-                  Да, рассчитать
-                </button>
-                <button
-                  onClick={() => setConfirmFinish(false)}
-                  className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-                >
-                  Отмена
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setConfirmFinish(true)}
-                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-                title="Зафиксировать итог на текущий момент. Пуля закрыта или нет — неважно: считаем по последней сдаче. После расчёта партия не меняется."
-              >
-                🏁 Рассчитать партию
-              </button>
-            ))}
-          {confirmReset ? (
-            <>
-              <button
-                onClick={() => {
-                  resetGame()
-                  setConfirmReset(false)
-                }}
-                className="px-5 py-3 bg-red-600 hover:bg-red-500 rounded-lg text-base font-bold"
-              >
-                Точно?
-              </button>
-              <button
-                onClick={() => setConfirmReset(false)}
-                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-              >
-                Нет
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => setConfirmReset(true)}
-              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-base font-semibold"
-              title="Текущая партия останется незавершённой в списке — её можно открыть и доиграть позже."
-            >
-              Отложить и начать новую
-            </button>
-          )}
+          <button
+            onClick={viewReset}
+            disabled={!viewingHistory}
+            className="px-4 py-3 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-30 disabled:bg-slate-700 rounded-lg text-base font-semibold"
+            title="Вернуться к текущему моменту"
+          >
+            ⤓ К текущей
+          </button>
+          <button
+            onClick={() => {
+              setEditIndex(editableIndex!)
+              setDealFormOpen(true)
+            }}
+            disabled={editableIndex === null}
+            className="px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 disabled:bg-slate-700 rounded-lg text-base font-semibold"
+            title="Исправить эту сдачу — партия пересчитается с неё"
+          >
+            ✏️ Исправить{editableIndex !== null ? ` ${editableIndex + 1}` : ''}
+          </button>
+          <button
+            onClick={() => {
+              if (editableIndex === null) return
+              if (confirmDeleteDeal) {
+                deleteDealAt(editableIndex)
+                setConfirmDeleteDeal(false)
+              } else {
+                setConfirmDeleteDeal(true)
+              }
+            }}
+            disabled={editableIndex === null}
+            className={`px-4 py-3 rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
+              confirmDeleteDeal ? 'bg-red-600 hover:bg-red-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
+            }`}
+            title="Убрать эту сдачу из партии"
+          >
+            {confirmDeleteDeal ? 'Точно удалить?' : `🗑 Удалить${editableIndex !== null ? ` ${editableIndex + 1}` : ''}`}
+          </button>
+          <button
+            onClick={() => {
+              if (confirmFinish) {
+                finishGame()
+                setConfirmFinish(false)
+                onBack?.()
+              } else {
+                setConfirmFinish(true)
+              }
+            }}
+            disabled={isFinished || viewingHistory}
+            className={`px-5 py-3 rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
+              confirmFinish ? 'bg-amber-600 hover:bg-amber-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
+            }`}
+            title="Зафиксировать итог на текущий момент. Пуля закрыта или нет — неважно: считаем по последней сдаче. После расчёта партия не меняется."
+          >
+            {confirmFinish ? 'Да, рассчитать' : '🏁 Рассчитать партию'}
+          </button>
+          <button
+            onClick={() => {
+              if (confirmReset) {
+                resetGame()
+                setConfirmReset(false)
+              } else {
+                setConfirmReset(true)
+              }
+            }}
+            className={`px-5 py-3 rounded-lg text-base font-semibold ${
+              confirmReset ? 'bg-red-600 hover:bg-red-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
+            }`}
+            title="Текущая партия останется незавершённой в списке — её можно открыть и доиграть позже."
+          >
+            {confirmReset ? 'Точно отложить?' : 'Отложить и начать новую'}
+          </button>
         </div>
       </div>
 

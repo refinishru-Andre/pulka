@@ -104,14 +104,15 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
   const { canSubmit, buildDeal } = useMemo(() => {
     if (dealType === 'game') {
       const visters = vistersFor(seats, dealer, gamePlayer, dealerVists)
-      // Автомат-сценарии: все вистующие пас; или полвиста + пас
-      const allPass = visters.every((v) => gameVistDecisions[v] === 'pass')
-      const halfAndPass =
-        visters.some((v) => gameVistDecisions[v] === 'half') &&
-        visters.some((v) => gameVistDecisions[v] === 'pass') &&
-        rules.halfVistLevels.includes(gameLevel)
-      const isAuto = allPass || halfAndPass
-      const vTotal = visters.reduce((sum, v) => sum + gameVisterTricks[v], 0)
+      // Полвиста — фиксированная плата, человек выбывает из розыгрыша.
+      // Взятки распределяются только между остальными защитниками.
+      const half = visters.filter(
+        (v) => gameVistDecisions[v] === 'half' && rules.halfVistLevels.includes(gameLevel),
+      )
+      const rest = visters.filter((v) => !half.includes(v))
+      // Играть некому — игра автоматом, без розыгрыша
+      const isAuto = rest.every((v) => gameVistDecisions[v] === 'pass')
+      const vTotal = rest.reduce((sum, v) => sum + gameVisterTricks[v], 0)
       const need = 10 - gamePlayerTricks
       const ok = isAuto || vTotal === need
       const contract: Contract = { kind: 'game', level: gameLevel }
@@ -126,7 +127,8 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
           // Для автомат-сценариев ставим playerTricks=level и vistersTricks=0
           playerTricks: isAuto ? gameLevel : gamePlayerTricks,
           // Пишем только участников сдачи, а не все четыре места
-          vistersTricks: pickBy(visters, (v) => (isAuto ? 0 : gameVisterTricks[v])),
+          // У полвистового взяток нет — он не играл
+          vistersTricks: pickBy(rest, (v) => (isAuto ? 0 : gameVisterTricks[v])),
           vistDecisions: pickBy(visters, (v) => gameVistDecisions[v]),
           ...(rules.prikupBonus && prikupFast > 0 ? { prikupFastTricks: prikupFast } : {}),
         }),
@@ -363,17 +365,19 @@ function GameFormFields(props: {
   const fourHanded = seats.length === 4
   const canPlay = seats.filter((p) => !fourHanded || p !== dealer)
   const visters = vistersFor(seats, dealer, gamePlayer, dealerVists)
-  const need = 10 - gamePlayerTricks
-  const entered = visters.reduce((s, v) => s + gameVisterTricks[v], 0)
-  const tricksOk = entered === need
   const availableLevels = GAME_LEVELS.filter((l) => l >= minBid)
-  // Автомат-сценарии: без розыгрыша, играющему пуля автоматом
+  // Полвиста — фиксированная плата, человек выбывает из розыгрыша: его взятки
+  // не спрашиваем вовсе. Остальные делят между собой всё, что не взял играющий.
+  const halfPlayers = visters.filter(
+    (v) => gameVistDecisions[v] === 'half' && rules.halfVistLevels.includes(gameLevel),
+  )
+  const playingVisters = visters.filter((v) => !halfPlayers.includes(v))
+  const need = 10 - gamePlayerTricks
+  const entered = playingVisters.reduce((s, v) => s + gameVisterTricks[v], 0)
+  const tricksOk = entered === need
+  // Играть некому — игра автоматом, без розыгрыша
+  const isAuto = playingVisters.every((v) => gameVistDecisions[v] === 'pass')
   const allPassAuto = visters.every((v) => gameVistDecisions[v] === 'pass')
-  const halfAndPassAuto =
-    visters.some((v) => gameVistDecisions[v] === 'half') &&
-    visters.some((v) => gameVistDecisions[v] === 'pass') &&
-    rules.halfVistLevels.includes(gameLevel)
-  const isAuto = allPassAuto || halfAndPassAuto
 
   return (
     <div className="space-y-3">
@@ -543,10 +547,11 @@ function GameFormFields(props: {
               {rules.poolCost[gameLevel]}.
             </>
           )}
-          {halfAndPassAuto && (
+          {!allPassAuto && (
             <>
-              Полвиста — игра без розыгрыша. Играющему пуля, полвистовому висты за{' '}
-              {halfVistTricks(rules, gameLevel)} взятки.
+              Играть некому — игра без розыгрыша. Играющему пуля, ушедшему за полвиста
+              засчитывается {halfVistTricks(rules, gameLevel)} взятк
+              {halfVistTricks(rules, gameLevel) === 1 ? 'а' : 'и'}.
             </>
           )}
         </div>
@@ -559,7 +564,7 @@ function GameFormFields(props: {
             Взятки вистующих — распределить {need} ({entered}/{need})
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {visters.map((v) => (
+            {playingVisters.map((v) => (
               <div key={v} className="bg-slate-900 rounded-lg p-2">
                 <div className="text-xs mb-1">{game.players[v]}</div>
                 <div className="flex items-center gap-2">

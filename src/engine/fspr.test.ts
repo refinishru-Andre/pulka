@@ -551,3 +551,73 @@ describe('Разбор сдачи: откуда взялась каждая ци
     expect(lines).toContain('пишет сдатчик, Гость')
   })
 })
+
+describe('Полвиста — фиксированная плата, человек выбывает из розыгрыша', () => {
+  const names = { A: 'Олег', B: 'Андрей', C: 'Дмитрий', D: '' } as Record<PlayerId, string>
+
+  it('на шестерной засчитывается 2 взятки, на семерной 1 — половина нормы пары', () => {
+    expect(FSPR_RULES.vistersDuty[6] / 2).toBe(2)
+    expect(FSPR_RULES.vistersDuty[7] / 2).toBe(1)
+    expect(HOME_RULES.vistersDuty[6] / 2).toBe(2)
+    expect(HOME_RULES.vistersDuty[7] / 2).toBe(1)
+    // Только на 6 и 7 — кодекс 6.6
+    expect(FSPR_RULES.halfVistLevels).toEqual([6, 7])
+    expect(HOME_RULES.halfVistLevels).toEqual([6, 7])
+  })
+
+  it('полвиста + вист: полвистовой получает фикс, взятки только у вистовавшего', () => {
+    // Раньше полвистовой считался обычным вистующим со своими взятками, и форма
+    // зря спрашивала их число. Теперь он вне розыгрыша.
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6 },
+      playerTricks: 6,
+      vistDecisions: { B: 'half', C: 'vist' },
+      vistersTricks: { C: 4 }, // все 4 взятки у вистовавшего, у полвистового их нет
+    }
+    const g = calcDeal(deal, PLAYERS, HOME_RULES)
+    // Полвистовой: 2 взятки × 4 = 8, фикс
+    expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(8)
+    // Вистовавший: свои 4 взятки × 4 = 16
+    expect(g.whists.find((w) => w.from === 'C')?.amount).toBe(16)
+    // И штрафа за недобор нормы нет: пара взяла 4 при норме 4
+    expect(g.mount.C).toBe(0)
+  })
+
+  it('полвиста + пас: играть некому, игра автоматом', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 7 },
+      playerTricks: 7,
+      vistDecisions: { B: 'half', C: 'pass' },
+      vistersTricks: {},
+    }
+    const g = calcDeal(deal, PLAYERS, HOME_RULES)
+    expect(g.pool.A).toBe(4) // пуля за семерную
+    expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(8) // 1 взятка × 8
+    expect(g.whists.find((w) => w.from === 'C')).toBeUndefined()
+  })
+
+  it('на восьмерной полвиста не бывает — решение считается обычным вистом', () => {
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 8 },
+      playerTricks: 8,
+      vistDecisions: { B: 'half', C: 'vist' },
+      vistersTricks: { B: 1, C: 1 },
+    }
+    const g = calcDeal(deal, PLAYERS, HOME_RULES)
+    // Оба пишут свои взятки по 12 — фикса нет
+    expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(12)
+    expect(g.whists.find((w) => w.from === 'C')?.amount).toBe(12)
+  })
+})

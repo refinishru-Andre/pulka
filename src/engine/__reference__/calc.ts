@@ -36,7 +36,6 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
   const player = deal.player
   const vs = visters(player)
 
-  const vTricksTotal = vs.reduce((sum, v) => sum + deal.vistersTricks[v], 0)
   const playerTricks = deal.playerTricks
 
   // Сталинград: на 6♠ оба вистующих ОБЯЗАНЫ вистовать — принудительно ставим 'vist'
@@ -52,23 +51,25 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
     return delta
   }
 
-  // СПЕЦ-СЛУЧАЙ 2: один пас + один полвиста (только на 6 и 7) → автомат
-  // Играющему — пуля, полвистовому — фиксированные взятки в вистах
-  const halfPlayer = vs.find((v) => effectiveDecisions[v] === 'half')
-  const passPlayerForHalf = vs.find((v) => effectiveDecisions[v] === 'pass')
-  if (halfPlayer && passPlayerForHalf && (level === 6 || level === 7)) {
-    delta.pool[player] += POOL_COST[level]
+  // ТРЕТЬЕ согласованное отступление от снимка (04.09.2026): полвиста — это
+  // ФИКСИРОВАННАЯ плата, и человек выбывает из розыгрыша, а не считается обычным
+  // вистующим со своими взятками. Раньше фикс работал только в паре с пасом
+  // второго; если второй вистовал, полвистовому считали его записанные взятки —
+  // и форма зря спрашивала их число. Правило исправлено по замечанию Андрея.
+  const halfPlayers = vs.filter(
+    (v) => effectiveDecisions[v] === 'half' && (level === 6 || level === 7),
+  )
+  halfPlayers.forEach((h) => {
     const halfTricks = level === 6 ? 2 : 1
-    delta.whists.push({
-      from: halfPlayer,
-      to: player,
-      amount: halfTricks * VIST_PER_TRICK[level],
-    })
+    delta.whists.push({ from: h, to: player, amount: halfTricks * VIST_PER_TRICK[level] })
+  })
+  const rest = vs.filter((v) => !halfPlayers.includes(v))
+  const activeVisters = rest.filter((v) => effectiveDecisions[v] !== 'pass')
+  const vTricksTotal = rest.reduce((sum, v) => sum + deal.vistersTricks[v], 0)
+  if (activeVisters.length === 0) {
+    delta.pool[player] += POOL_COST[level]
     return delta
   }
-
-  // Кто вистовал полноценно (не пас, включая полвиста)
-  const activeVisters = vs.filter((v) => effectiveDecisions[v] !== 'pass')
 
   // Играющий сыграл?
   const success = playerTricks >= level
@@ -128,7 +129,7 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
     // Консоляция — ОБОИМ (вистующему и пасовавшему), по (недобор × стоимость виста игры)
     const consolation = shortfall * VIST_PER_TRICK[level]
     if (consolation > 0) {
-      vs.forEach((v) => {
+      rest.forEach((v) => {
         delta.whists.push({ from: v, to: player, amount: consolation })
       })
     }
