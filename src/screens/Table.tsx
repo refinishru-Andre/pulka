@@ -352,6 +352,9 @@ export function Table({ onBack }: Props = {}) {
           >
             {confirmFinish ? 'Да, рассчитать' : '🏁 Рассчитать партию'}
           </button>
+          {/* Откладывать можно только НЕдоигранную партию. У рассчитанной
+              откладывать нечего — она уже в списке, и активная кнопка тут
+              только сбивала с толку. */}
           <button
             onClick={() => {
               if (confirmReset) {
@@ -361,10 +364,15 @@ export function Table({ onBack }: Props = {}) {
                 setConfirmReset(true)
               }
             }}
-            className={`px-5 py-3 min-w-[260px] rounded-lg text-base font-semibold ${
+            disabled={isFinished}
+            className={`px-5 py-3 min-w-[260px] rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
               confirmReset ? 'bg-red-600 hover:bg-red-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
             }`}
-            title="Текущая партия останется незавершённой в списке — её можно открыть и доиграть позже."
+            title={
+              isFinished
+                ? 'Партия уже рассчитана — откладывать нечего. Новую начинают из списка партий.'
+                : 'Партия останется незавершённой в списке — её можно открыть и доиграть позже.'
+            }
           >
             {confirmReset ? 'Точно отложить?' : 'Отложить и начать новую'}
           </button>
