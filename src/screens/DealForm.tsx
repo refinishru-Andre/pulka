@@ -7,7 +7,7 @@ import {
   prevClockwise,
   rulesOf,
   halfVistTricks,
-  RASPAS_LEVEL_NAME,
+  raspasName,
 } from '../engine'
 
 type DealType = 'game' | 'misere' | 'raspas' | 'giveup' | 'adjust'
@@ -248,7 +248,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
                 {t === 'game' && 'Игра'}
                 {t === 'misere' && 'Мизер'}
                 {t === 'raspas' &&
-                  `${RASPAS_LEVEL_NAME[raspasLevelFor(raspasState)]} распас`}
+                  `${raspasName(raspasLevelFor(raspasState), rules)} распас`}
                 {t === 'giveup' && 'Без 3'}
                 {t === 'adjust' && '✏️ Правка'}
               </button>
@@ -672,7 +672,7 @@ function RaspasFormFields(props: {
   const total = players.reduce((sum, p) => sum + tricks[p], 0)
   const tricksOk = total === 10
   const cost = rules.raspasCostLadder[Math.min(level - 1, rules.raspasCostLadder.length - 1)]
-  const levelLabel = RASPAS_LEVEL_NAME[level]
+  const levelLabel = raspasName(level, rules)
 
   return (
     <div className="space-y-3">

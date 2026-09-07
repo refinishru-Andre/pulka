@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { calcDeal } from './calc'
 import { applyDeal } from './index'
-import { nextRaspasState, nextFirstHand, minBidFor } from './raspas'
+import { nextRaspasState, nextFirstHand, minBidFor, raspasName, raspasStateLabel } from './raspas'
 import { settle } from './settle'
 import { dealBreakdown } from './report'
 import { HOME_RULES, FSPR_RULES } from './conventions'
@@ -618,5 +618,74 @@ describe('Полвиста — фиксированная плата, челов
     // Оба пишут свои взятки по 12 — фикса нет
     expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(12)
     expect(g.whists.find((w) => w.from === 'C')?.amount).toBe(12)
+  })
+})
+
+// ============================================================================
+// Сверка с документом «Ленинградская система записи для турниров ФСПР»
+// (01.11.2006). Он даёт таблицу цен и ОДИН числовой пример — на нём и ловится
+// вся связка «джентльменский вист + консоляция + сдатчик».
+// ============================================================================
+describe('Сверка с таблицей записи ФСПР', () => {
+  it('цены совпадают с таблицей документа', () => {
+    const R = FSPR_RULES
+    // контракт: в пулю за сыгранную | вист за взятку | в гору за недобор игры |
+    //           в гору за недобор виста
+    const table: [6 | 7 | 8 | 9 | 10, number, number, number, number][] = [
+      [6, 2, 4, 4, 2],
+      [7, 4, 8, 8, 4],
+      [8, 6, 12, 12, 6],
+      [9, 8, 16, 16, 8],
+      [10, 10, 20, 20, 10],
+    ]
+    table.forEach(([lvl, pool, vist, mount, visterMiss]) => {
+      expect(R.poolCost[lvl]).toBe(pool)
+      expect(R.vistPerTrick[lvl]).toBe(vist)
+      expect(R.mountPenalty[lvl]).toBe(mount)
+      expect(R.visterPenaltyPerMiss[lvl]).toBe(visterMiss)
+    })
+    // Мизер: 10 в пулю, 20 в гору за пойманную, вистов не пишут вовсе
+    expect(R.miserePoolCost).toBe(10)
+    expect(R.misereTrickPenalty).toBe(20)
+  })
+
+  it('пример из документа: 6 без одной, один пасовал — по 14 вистов', () => {
+    // Дословно: «6 без одной - по 14 вистов = (4*(5+1+1))/2.
+    // Сдатчик пишет только консоляцию (4 виста в нашем примере)».
+    // A играет шестерную и берёт 5. Защита взяла 5 взяток, все у B: C пасовал.
+    // D сдавал и в розыгрыше не участвовал.
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'D',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6 },
+      playerTricks: 5,
+      vistersTricks: { B: 5, C: 0 },
+      vistDecisions: { B: 'vist', C: 'pass' },
+    }
+    const d = calcDeal(deal, SEATS4, FSPR_RULES)
+    const on = (from: PlayerId) =>
+      d.whists.filter((w) => w.from === from && w.to === 'A').reduce((s, w) => s + w.amount, 0)
+
+    expect(on('B')).toBe(14) // 5 взяток пополам = 10, плюс консоляция 4
+    expect(on('C')).toBe(14) // пасовал, но джентльменский вист даёт поровну
+    expect(on('D')).toBe(4) // сдатчик — только консоляция
+    expect(d.mount.A).toBe(4) // подсад без одной на шестерной: 1 × 4 в гору
+    // Норма пары на шестерной 4 взятки, взяли 5 — в гору никто не пишет
+    expect(d.mount.B).toBe(0)
+    expect(d.mount.C).toBe(0)
+  })
+
+  it('на турнире распасы нумеруются, а не зовутся восьмерными', () => {
+    // Выход затруднённый 7-7-7: «восьмерных распасов» в турнире не бывает,
+    // заказ так и стоит на семи — растёт только цена взятки.
+    expect(raspasName(1, FSPR_RULES)).toBe('1-й')
+    expect(raspasName(3, FSPR_RULES)).toBe('3-й и дальше')
+    expect(raspasStateLabel('eightRaspas', FSPR_RULES)).not.toContain('Восьмерные')
+    expect(raspasStateLabel('eightRaspas', FSPR_RULES)).toContain('заказ от 7')
+    // Дома всё по-прежнему: лесенка 6-7-8 даёт каждому распасу своё имя
+    expect(raspasName(3, HOME_RULES)).toBe('восьмерной')
+    expect(raspasStateLabel('eightRaspas', HOME_RULES)).toContain('Восьмерные')
   })
 })

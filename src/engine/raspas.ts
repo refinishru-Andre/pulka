@@ -182,11 +182,41 @@ export function raspasLevelFor(raspasState: RaspasState): 1 | 2 | 3 {
 
 // Как распас называется за столом. Уровень — это не порядковый номер, а заказ,
 // от которого играют дальше: шестерной поднимает минимум до 7, семерной до 8,
-// восьмерной оставляет 8.
+// восьмерной оставляет 8. Это ДОМАШНЯЯ лесенка 6-7-8.
 export const RASPAS_LEVEL_NAME: Record<1 | 2 | 3, string> = {
   1: 'шестерной',
   2: 'семерной',
   3: 'восьмерной',
+}
+
+// Различает ли лесенка заказов ступени распасов.
+// Дома 6-7-8 — у каждого распаса своё имя. На турнире выход затруднённый,
+// 6-7-7: после второго и после третьего заказывают одинаково, и звать оба
+// «семерными» — только путать. Тогда распасы нумеруются.
+function ladderNamesDistinct(rules: Rules): boolean {
+  const a = ladderAt(rules.minBidLadder, 0)
+  const b = ladderAt(rules.minBidLadder, 1)
+  const c = ladderAt(rules.minBidLadder, 2)
+  return a !== b && b !== c
+}
+
+const BID_ADJ: Record<number, string> = {
+  6: 'шестерной',
+  7: 'семерной',
+  8: 'восьмерной',
+  9: 'девятерной',
+  10: 'десятерной',
+}
+
+// Название распаса по конвенциям партии.
+// Дома: «шестерной» / «семерной» / «восьмерной».
+// Турнир (6-7-7): «1-й» / «2-й» / «3-й и дальше» — потому что «восьмерных
+// распасов» там не бывает, заказ так и стоит на семи.
+export function raspasName(level: 1 | 2 | 3, rules: Rules = HOME_RULES): string {
+  if (ladderNamesDistinct(rules)) {
+    return BID_ADJ[ladderAt(rules.minBidLadder, level - 1)] ?? `${level}-й`
+  }
+  return level >= 3 ? '3-й и дальше' : `${level}-й`
 }
 
 // Подпись текущего состояния для экрана. Говорит две вещи: от чего заказывать
@@ -197,11 +227,18 @@ export function raspasStateLabel(raspasState: RaspasState, rules: Rules = HOME_R
     case 'normal':
       return `Обычная игра · заказ от ${min}`
     case 'afterFirst':
-      return `После шестерного распаса · заказ от ${min}`
+      return ladderNamesDistinct(rules)
+        ? `После шестерного распаса · заказ от ${min}`
+        : `Распасов подряд: 1 · заказ от ${min}`
     case 'afterSecond':
       // Старое состояние, в новых партиях не возникает — оставлено для истории
       return `После семерного распаса · заказ от ${min}`
     case 'eightRaspas':
+      // На турнире «восьмерных распасов» нет: заказ стоит на семи, растёт только
+      // цена взятки. Писать «восьмерные · заказ от 7» — противоречие на экране.
+      if (!ladderNamesDistinct(rules)) {
+        return `Распасов подряд: 2 и больше · заказ от ${min} · взятка ${raspasCostFor(raspasState, rules)}`
+      }
       return rules.firstHandStaysOnFailedHighGame
         ? `Восьмерные распасы · заказ от ${min} · рука остаётся при несыгранной`
         : `Восьмерные распасы · заказ от ${min}`

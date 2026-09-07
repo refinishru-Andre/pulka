@@ -10,7 +10,7 @@ import {
   isGameFinished,
   rulesOf,
   raspasStateLabel,
-  RASPAS_LEVEL_NAME,
+  raspasName,
   gameResultText,
   dealBreakdown,
 } from '../engine'
@@ -173,7 +173,7 @@ export function Table({ onBack }: Props = {}) {
         `${player} мизер${lastDeal.blind ? ' б/п' : ''}, ${lastDeal.playerTricks === 0 ? 'сыграл' : `поймали ${lastDeal.playerTricks}`}.`,
       )
     } else if (lastDeal.type === 'raspas') {
-      const name = RASPAS_LEVEL_NAME[lastDeal.level]
+      const name = raspasName(lastDeal.level, rulesOf(game))
       lines.push(
         `Распас ${name}: ` +
           seats.map((p) => `${game.players[p]}=${lastDeal.tricks[p] ?? 0}`).join(', '),
