@@ -564,10 +564,11 @@ describe('Полвиста — фиксированная плата, челов
     expect(HOME_RULES.halfVistLevels).toEqual([6, 7])
   })
 
-  it('полвиста + вист: полвистовой получает фикс, взятки только у вистовавшего', () => {
-    // За столом такого не бывает: полвиста стоит только когда оба спасовали
-    // (см. calc.ts). Проверка на случай сдачи, вбитой руками: полвистовой
-    // получает свой фикс и в розыгрыше не участвует, взятки только у вистующего.
+  it('полвиста + вист = ВОЗВРАТ ВИСТА: ушедший не пишет ничего', () => {
+    // Торговля «пас — полвиста — вист»: В пошёл за полвиста, Б вернул вист.
+    // Полвиста аннулировано (кодекс 3.8.8.2), ушедший вистов не пишет (3.8.14).
+    // Так и отличается обычный «вист — пас» от возврата: во втором за вторым
+    // защитником записано «полвиста», а не «пас».
     const deal: Deal = {
       type: 'game',
       dealer: 'C',
@@ -575,16 +576,58 @@ describe('Полвиста — фиксированная плата, челов
       player: 'A',
       contract: { kind: 'game', level: 6 },
       playerTricks: 6,
-      vistDecisions: { B: 'half', C: 'vist' },
-      vistersTricks: { C: 4 }, // все 4 взятки у вистовавшего, у полвистового их нет
+      vistDecisions: { B: 'vist', C: 'half' },
+      vistersTricks: { B: 4 },
     }
     const g = calcDeal(deal, PLAYERS, HOME_RULES)
-    // Полвистовой: 2 взятки × 4 = 8, фикс
-    expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(8)
-    // Вистовавший: свои 4 взятки × 4 = 16
-    expect(g.whists.find((w) => w.from === 'C')?.amount).toBe(16)
-    // И штрафа за недобор нормы нет: пара взяла 4 при норме 4
-    expect(g.mount.C).toBe(0)
+    expect(g.whists.find((w) => w.from === 'C')).toBeUndefined() // ушедший — ноль
+    expect(g.whists.find((w) => w.from === 'B')?.amount).toBe(16) // 4 взятки × 4
+    expect(g.mount.B).toBe(0) // норма пары 4, взял 4
+  })
+
+  it('возврат виста: при подсаде вернувший забирает и висты, и консоляцию', () => {
+    // Вчетвером. А сел на шестерной без одной, защита взяла 5.
+    // Б вернул вист и взял все 5, В уходил за полвиста, Г сдавал.
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'D',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6 },
+      playerTricks: 5,
+      vistDecisions: { B: 'vist', C: 'half' },
+      vistersTricks: { B: 5 },
+    }
+    const g = calcDeal(deal, SEATS4, FSPR_RULES)
+    const on = (from: PlayerId) =>
+      g.whists.filter((w) => w.from === from && w.to === 'A').reduce((s, w) => s + w.amount, 0)
+    expect(on('B')).toBe(24) // 5 × 4 = 20 за взятки, плюс консоляция 4
+    expect(on('C')).toBe(0) // уходил за полвиста — ничего
+    expect(on('D')).toBe(4) // «и сдатчик только за подсад»
+    // Для сравнения: обычный «вист — пас» дал бы 14 / 14 / 4 — пример из
+    // документа ФСПР, он проверяется отдельным тестом выше.
+  })
+
+  it('вистующий сдатчик забирает всё: защитники не пишут даже консоляцию', () => {
+    // Торговля «пас — полвиста — пас»: оба защитника отказались, вистует Г.
+    // «В случае подсада разыгрывающего все висты записывает только он».
+    const deal: Deal = {
+      type: 'game',
+      dealer: 'D',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6 },
+      playerTricks: 5,
+      vistDecisions: { B: 'pass', C: 'pass', D: 'vist' },
+      vistersTricks: { D: 5 },
+    }
+    const g = calcDeal(deal, SEATS4, FSPR_RULES)
+    const on = (from: PlayerId) =>
+      g.whists.filter((w) => w.from === from && w.to === 'A').reduce((s, w) => s + w.amount, 0)
+    expect(on('D')).toBe(24) // 20 за взятки + консоляция 4
+    expect(on('B')).toBe(0)
+    expect(on('C')).toBe(0)
+    expect(g.mount.D).toBe(0) // сдатчик за недобор не отвечает
   })
 
   it('полвиста + пас: играть некому, игра автоматом', () => {

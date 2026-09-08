@@ -59,14 +59,19 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
   const halfPlayers = vs.filter(
     (v) => effectiveDecisions[v] === 'half' && (level === 6 || level === 7),
   )
-  halfPlayers.forEach((h) => {
-    const halfTricks = level === 6 ? 2 : 1
-    delta.whists.push({ from: h, to: player, amount: halfTricks * VIST_PER_TRICK[level] })
-  })
+  //
+  // ЧЕТВЁРТОЕ согласованное отступление от снимка (08.09.2026): полвиста стоит
+  // только тогда, когда играть некому. Если кто-то вистует — значит вист
+  // вернули, и уходивший за полвиста не пишет ничего (кодекс преферанса
+  // п. 3.8.8.2 и 3.8.14). Раньше он получал свой фикс при любом раскладе.
   const rest = vs.filter((v) => !halfPlayers.includes(v))
   const activeVisters = rest.filter((v) => effectiveDecisions[v] !== 'pass')
   const vTricksTotal = rest.reduce((sum, v) => sum + deal.vistersTricks[v], 0)
   if (activeVisters.length === 0) {
+    halfPlayers.forEach((h) => {
+      const halfTricks = level === 6 ? 2 : 1
+      delta.whists.push({ from: h, to: player, amount: halfTricks * VIST_PER_TRICK[level] })
+    })
     delta.pool[player] += POOL_COST[level]
     return delta
   }

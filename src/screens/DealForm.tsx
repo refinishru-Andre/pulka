@@ -9,6 +9,7 @@ import {
   halfVistTricks,
   raspasName,
 } from '../engine'
+import type { Rules } from '../engine'
 
 type DealType = 'game' | 'misere' | 'raspas' | 'giveup' | 'adjust'
 type AdjustTarget = 'mount' | 'pool' | 'whists'
@@ -536,6 +537,16 @@ function GameFormFields(props: {
             )
           })}
         </div>
+        <VistHint
+          visters={visters}
+          decisions={gameVistDecisions}
+          halfPlayers={halfPlayers}
+          names={game.players}
+          dealer={dealer}
+          fourHanded={fourHanded}
+          rules={rules}
+          level={gameLevel}
+        />
       </div>
 
       {/* Автомат-сценарий: показываем инфо-плашку вместо полей */}
@@ -775,6 +786,56 @@ function GiveupFormFields(props: {
 
 // Кто вистует в этой сдаче. Втроём — все, кроме играющего. Вчетвером сдающий вне
 // розыгрыша, но может вступить сам (торговля «пас — полвиста — пас»).
+// Подсказка под раскладом виста: одной строкой, кто что напишет.
+//
+// Нужна потому, что «Пас» и «Полвиста» стоят рядом, а разница между ними
+// огромная: при обычном «вист — пас» висты делятся поровну, а при возврате
+// виста после полвиста всё пишет вистовавший. Легко ткнуть не туда и не
+// заметить (замечание Андрея, 08.09.2026).
+function VistHint({
+  visters, decisions, halfPlayers, names, dealer, fourHanded, rules, level,
+}: {
+  visters: PlayerId[]
+  decisions: Record<PlayerId, VistDecision>
+  halfPlayers: PlayerId[]
+  names: Record<PlayerId, string>
+  dealer: PlayerId
+  fourHanded: boolean
+  rules: Rules
+  level: GameLevel
+}) {
+  const who = (p: PlayerId) => names[p] || p
+  const active = visters.filter((v) => !halfPlayers.includes(v) && decisions[v] !== 'pass')
+  const passed = visters.filter((v) => decisions[v] === 'pass')
+  const half = halfPlayers[0]
+  const solo = active.length === 1 ? active[0] : null
+
+  let text = ''
+  let warn = false
+  if (half && active.length === 0) {
+    const t = halfVistTricks(rules, level)
+    text = `Полвиста в силе: розыгрыша нет, ${who(half)} пишет ${t} взятк${t === 1 ? 'у' : 'и'} — ${t * rules.vistPerTrick[level]} вистов.`
+  } else if (half && solo) {
+    warn = true
+    text = `Вист вернули после полвиста: все висты и консоляцию пишет ${who(solo)}, ${who(half)} не пишет ничего.`
+  } else if (solo && fourHanded && solo === dealer) {
+    warn = true
+    text = `Вистует сдатчик: все висты и консоляцию пишет он один, защитники ничего не пишут.`
+  } else if (solo && passed.length > 0) {
+    text =
+      rules.vistStyle === 'gentleman'
+        ? `Висты делятся поровну между ${visters.map(who).join(' и ')}. Если ${who(passed[0])} уходил за полвиста — ставь ему «Полвиста», а не «Пас».`
+        : `Все висты пишет ${who(solo)}, пасовавшему только консоляция.`
+  } else if (active.length > 1) {
+    text = 'Вистуют оба — каждый пишет свои взятки.'
+  }
+  if (!text) return null
+  return (
+    <div className={`text-xs mt-1 ${warn ? 'text-yellow-500' : 'text-slate-500'}`}>{text}</div>
+  )
+}
+
+
 function vistersFor(
   seats: PlayerId[],
   dealer: PlayerId,

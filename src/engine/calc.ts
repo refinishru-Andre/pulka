@@ -71,20 +71,31 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
   // в торговле «пас — полвиста — вист» полвиста перебито вистом и до записи не
   // доходит (уточнение Андрея, 07.09.2026). Обработка ниже всё равно общая —
   // она не должна ломаться на сдаче, вбитой руками не по правилам.
+  //
+  // Полвиста СТОИТ только тогда, когда играть некому. Если кто-то вистует —
+  // значит вист вернули (торговля «пас — полвиста — вист»), и по кодексу
+  // преферанса п. 3.8.8.2 уходивший за полвиста теряет право вистовать, а по
+  // п. 3.8.14 «вистов при ремизе разыгрывающего не пишет». Ноль: он отказался
+  // и от полвиста, и от участия. Так и отличается обычный расклад «вист — пас»
+  // от возврата виста: во втором за вторым защитником записано «полвиста».
   const halfPlayers = vs.filter(
     (v) => effectiveDecisions[v] === 'half' && rules.halfVistLevels.includes(level),
   )
-  halfPlayers.forEach((h) => {
-    const tricks = halfVistTricks(rules, level)
-    if (tricks > 0) {
-      delta.whists.push({ from: h, to: player, amount: tricks * rules.vistPerTrick[level] })
-    }
-  })
 
   // Остальные защитники — те, кто реально сел играть
   const rest = vs.filter((v) => !halfPlayers.includes(v))
   const activeVisters = rest.filter((v) => effectiveDecisions[v] !== 'pass')
   const vTricksTotal = rest.reduce((sum, v) => sum + (deal.vistersTricks[v] ?? 0), 0)
+
+  // Полвиста никто не перебил — фиксированная плата, розыгрыша не будет
+  if (activeVisters.length === 0) {
+    halfPlayers.forEach((h) => {
+      const tricks = halfVistTricks(rules, level)
+      if (tricks > 0) {
+        delta.whists.push({ from: h, to: player, amount: tricks * rules.vistPerTrick[level] })
+      }
+    })
+  }
 
   // Играть некому — игра автоматом, без розыгрыша
   if (activeVisters.length === 0) {
@@ -113,8 +124,20 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
   //
   // Если вистуют ОБА, делить нечего: каждый пишет свои взятки, и оба стиля дают
   // одно и то же.
+  //
+  // Дележа НЕ происходит, когда вист достался одному через перевистовку.
+  // Конвенции ФСПР называют два таких случая, и в обоих «все висты записывает»
+  // один человек:
+  //   «пас — полвиста — вист» — вернувший вист (за вторым записано «полвиста»);
+  //   «пас — полвиста — пас»  — вистующий сдатчик (виден сам по себе: раз он
+  //                             вистует, значит оба защитника до этого отказались).
+  const soloVister = activeVisters.length === 1 ? activeVisters[0] : null
+  const vistReturned = soloVister !== null && halfPlayers.length > 0
+  const dealerVisted = soloVister !== null && seats.length === 4 && soloVister === deal.dealer
+  const noSplit = vistReturned || dealerVisted
+
   const someonePassed = activeVisters.length < rest.length
-  if (rules.vistStyle === 'gentleman' && someonePassed && activeVisters.length > 0) {
+  if (rules.vistStyle === 'gentleman' && someonePassed && activeVisters.length > 0 && !noSplit) {
     const share = vTricksTotal / rest.length
     if (share > 0) {
       rest.forEach((v) => delta.whists.push({ from: v, to: player, amount: share * perTrick }))
@@ -181,10 +204,15 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
 
     // Консоляция — каждому вистующему, включая пасовавшего.
     // Вчетвером её получает и сдающий, хотя в розыгрыше не участвовал.
+    //
+    // Но там, где дележа нет, нет и общей консоляции: «все висты записывает
+    // только он». Вистующему сдатчику — всё одному; вернувшему вист — всё,
+    // кроме консоляции сдатчика, которая за ним остаётся по прямой оговорке
+    // конвенции «(и сдатчик только за подсад)».
     if (rules.consolation) {
       const consolation = shortfall * perTrick
       if (consolation > 0) {
-        const receivers = new Set<PlayerId>(rest)
+        const receivers = noSplit && soloVister ? new Set<PlayerId>([soloVister]) : new Set<PlayerId>(rest)
         if (rules.consolationToDealer && seats.length === 4) receivers.add(deal.dealer)
         receivers.forEach((v) => {
           if (v !== player) delta.whists.push({ from: v, to: player, amount: consolation })

@@ -90,7 +90,8 @@ export function dealBreakdown(
     return lines
   }
   const half = vs.find((v) => deal.vistDecisions[v] === 'half')
-  if (half && passed.length > 0 && rules.halfVistLevels.includes(level)) {
+  const halfStands = half !== undefined && active.every((v) => v === half)
+  if (half && halfStands && rules.halfVistLevels.includes(level)) {
     const t = halfVistTricks(rules, level)
     lines.push(`Полвиста — без розыгрыша. ${who(deal.player)} пишет ${rules.poolCost[level]} в пулю.`)
     lines.push(`${who(half)} за полвиста: ${t} × ${perTrick} = ${t * perTrick} на ${who(deal.player)}.`)
@@ -108,16 +109,27 @@ export function dealBreakdown(
   }
 
   // Висты за взятки
-  const gentlemanSplit = rules.vistStyle === 'gentleman' && passed.length > 0
+  // Дележ отменяется, если вист достался одному через перевистовку — см. calc.ts
+  const realVisters = active.filter((v) => deal.vistDecisions[v] !== 'half')
+  const soloVister = realVisters.length === 1 ? realVisters[0] : null
+  const vistReturned = soloVister !== null && half !== undefined
+  const dealerVisted = soloVister !== null && fourHanded && soloVister === deal.dealer
+  const noSplit = vistReturned || dealerVisted
+  const gentlemanSplit = rules.vistStyle === 'gentleman' && passed.length > 0 && !noSplit
   if (total > 0) {
     if (gentlemanSplit) {
       const share = total / vs.length
       lines.push(
         `Взятки защиты: ${total} × ${perTrick} = ${total * perTrick}. Вист джентльменский — делим поровну, по ${share * perTrick} каждому (${vs.map(who).join(' и ')}).`,
       )
-    } else if (active.length === 1) {
+    } else if (soloVister) {
+      const why = vistReturned
+        ? ` (${who(half!)} уходил за полвиста, вист вернули — дележа нет, полвиста аннулировано)`
+        : dealerVisted
+          ? ' (вистовал сдатчик — оба защитника отказались, дележа нет)'
+          : ''
       lines.push(
-        `${who(active[0])} вистовал один — пишет все ${total} взяток пары: ${total} × ${perTrick} = ${total * perTrick}.`,
+        `${who(soloVister)} вистовал один${why} — пишет все ${total} взяток пары: ${total} × ${perTrick} = ${total * perTrick}.`,
       )
     } else {
       lines.push(
@@ -135,7 +147,7 @@ export function dealBreakdown(
     const short = level - deal.playerTricks
     const cons = short * perTrick
     if (cons > 0) {
-      const receivers = new Set<PlayerId>(vs)
+      const receivers = noSplit && soloVister ? new Set<PlayerId>([soloVister]) : new Set<PlayerId>(vs)
       if (rules.consolationToDealer && fourHanded) receivers.add(deal.dealer)
       lines.push(
         `Консоляция за подсад: ${short} × ${perTrick} = ${cons} каждому (${[...receivers].filter((p) => p !== deal.player).map(who).join(', ')}).`,
