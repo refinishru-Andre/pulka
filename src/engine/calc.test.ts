@@ -1429,7 +1429,13 @@ describe('Штраф вистующим считается от недобора
     // Пара взяла 3 при норме 4 — недобор 1, в гору 2. Хоть вдвоём, хоть одному.
     const both = calcDeal(deal(6, 7, 3, 0), PLAYERS)
     const solo: Deal = {
-      ...deal(6, 7, 3, 0),
+      type: 'game',
+      dealer: 'C',
+      firstHand: 'A',
+      player: 'A',
+      contract: { kind: 'game', level: 6 },
+      playerTricks: 7,
+      vistersTricks: { B: 3, C: 0 },
       vistDecisions: { B: 'vist', C: 'pass' },
     }
     const one = calcDeal(solo, PLAYERS)
