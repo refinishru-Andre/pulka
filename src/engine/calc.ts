@@ -178,13 +178,27 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>, seats: Seats, rules: Ru
       // недобрал СВОЮ. Норма пары = 1 (8-я, 9-я, а в турнире и 10-я): штраф
       // каждому, кто лично взял ноль, и на целую взятку.
       if (duty >= 2) {
+        // Норма у ПАРЫ, значит и недобор считается от суммы взяток, а не у
+        // каждого отдельно. Личная норма (duty/2) решает только, КТО виноват:
+        // взявший больше своей нормы покрывает часть недобора партнёра.
+        //
+        // Замечание Андрея 08.09.2026: на шестерной пара должна 4, взяли 3
+        // (один 3, другой 0) — недобор пары ОДНА взятка, значит и в гору 2, а
+        // не 4 за личные две. Раньше считались личные недоборы, и излишек
+        // партнёра пропадал впустую.
         const dutyPerPlayer = duty / 2
-        activeVisters.forEach((v) => {
-          const myTricks = deal.vistersTricks[v] ?? 0
-          if (myTricks < dutyPerPlayer && paysForMiss(v)) {
-            delta.mount[v] += (dutyPerPlayer - myTricks) * perMiss
-          }
-        })
+        const pairShort = duty - vTricksTotal
+        const shortOf = (v: PlayerId) =>
+          Math.max(0, dutyPerPlayer - (deal.vistersTricks[v] ?? 0))
+        const totalShort = activeVisters.reduce((sum, v) => sum + shortOf(v), 0)
+        if (totalShort > 0) {
+          activeVisters.forEach((v) => {
+            const mine = shortOf(v)
+            if (mine > 0 && paysForMiss(v)) {
+              delta.mount[v] += (mine / totalShort) * pairShort * perMiss
+            }
+          })
+        }
       } else {
         activeVisters.forEach((v) => {
           if ((deal.vistersTricks[v] ?? 0) === 0 && paysForMiss(v)) {

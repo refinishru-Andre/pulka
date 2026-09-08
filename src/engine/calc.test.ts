@@ -1386,3 +1386,62 @@ describe('Итог партии текстом', () => {
     expect(text).toContain('Никто никому ничего не должен')
   })
 })
+
+// ============================================================================
+// Недобор вистующих считается от СУММЫ взяток пары (замечание Андрея 08.09.2026)
+// ============================================================================
+describe('Штраф вистующим считается от недобора ПАРЫ, а не от личных норм', () => {
+  const deal = (level: 6 | 7, playerTricks: number, b: number, c: number): Deal => ({
+    type: 'game',
+    dealer: 'C',
+    firstHand: 'A',
+    player: 'A',
+    contract: { kind: 'game', level },
+    playerTricks,
+    vistersTricks: { B: b, C: c },
+    vistDecisions: { B: 'vist', C: 'vist' },
+  })
+
+  it('один взял больше своей нормы — покрывает недобор партнёра', () => {
+    // Шестерная, норма пары 4. Борис взял 3, Виктор 0 — пара недобрала ОДНУ.
+    // В гору идёт одна недобранная взятка (2), а не личные два недобора Виктора.
+    const g = calcDeal(deal(6, 7, 3, 0), PLAYERS)
+    expect(g.mount.B).toBe(0)
+    expect(g.mount.C).toBe(2)
+    expect(g.mount.B + g.mount.C).toBe(2) // недобор пары 1 × 2
+  })
+
+  it('оба ниже своей нормы — недобор пары делится по личным', () => {
+    // Пара взяла 1 (0 + 1), недобрала 3. Борис недобрал 2, Виктор 1.
+    const g = calcDeal(deal(6, 9, 0, 1), PLAYERS)
+    expect(g.mount.B).toBe(4)
+    expect(g.mount.C).toBe(2)
+    expect(g.mount.B + g.mount.C).toBe(6) // недобор пары 3 × 2
+  })
+
+  it('норма пары выполнена — не платит никто, даже взявший ноль', () => {
+    const g = calcDeal(deal(6, 6, 4, 0), PLAYERS)
+    expect(g.mount.B).toBe(0)
+    expect(g.mount.C).toBe(0)
+  })
+
+  it('сумма штрафа не зависит от того, вистовал один или двое', () => {
+    // Пара взяла 3 при норме 4 — недобор 1, в гору 2. Хоть вдвоём, хоть одному.
+    const both = calcDeal(deal(6, 7, 3, 0), PLAYERS)
+    const solo: Deal = {
+      ...deal(6, 7, 3, 0),
+      vistDecisions: { B: 'vist', C: 'pass' },
+    }
+    const one = calcDeal(solo, PLAYERS)
+    expect(both.mount.B + both.mount.C).toBe(2)
+    expect(one.mount.B + one.mount.C).toBe(2)
+  })
+
+  it('на семерной так же', () => {
+    // Норма пары 2. Борис взял 2, Виктор 0 — норма выполнена, штрафа нет.
+    expect(calcDeal(deal(7, 8, 2, 0), PLAYERS).mount.C).toBe(0)
+    // Пара взяла 1 — недобрала одну, в гору 4 на взявшего меньше нормы
+    const g = calcDeal(deal(7, 9, 1, 0), PLAYERS)
+    expect(g.mount.B + g.mount.C).toBe(4)
+  })
+})

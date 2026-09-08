@@ -104,14 +104,23 @@ function calcGame(deal: Extract<Deal, { type: 'game' }>): DealDelta {
     // Норма пары = 1 (8-я, 9-я): пара должна взять 1. Если пара не взяла — штраф каждому, кто лично взял 0, на 1 недобранную взятку.
     if (vTricksTotal < duty) {
       if (duty >= 2) {
+        // ПЯТОЕ согласованное отступление от снимка (08.09.2026): норма у пары,
+        // недобор считается от суммы взяток. Личная норма решает только, кто
+        // виноват; взявший больше своей нормы покрывает недобор партнёра.
+        // Раньше складывались личные недоборы, и пара платила больше, чем
+        // недобрала.
         const dutyPerPlayer = duty / 2
-        activeVisters.forEach((v) => {
-          const myTricks = deal.vistersTricks[v]
-          if (myTricks < dutyPerPlayer) {
-            const myShort = dutyPerPlayer - myTricks
-            delta.mount[v] += myShort * VISTER_PENALTY_PER_MISS[level]
-          }
-        })
+        const pairShort = duty - vTricksTotal
+        const shortOf = (v: PlayerId) => Math.max(0, dutyPerPlayer - deal.vistersTricks[v])
+        const totalShort = activeVisters.reduce((sum, v) => sum + shortOf(v), 0)
+        if (totalShort > 0) {
+          activeVisters.forEach((v) => {
+            const mine = shortOf(v)
+            if (mine > 0) {
+              delta.mount[v] += (mine / totalShort) * pairShort * VISTER_PENALTY_PER_MISS[level]
+            }
+          })
+        }
       } else {
         // duty = 1 — каждый вистующий, взявший 0, платит за 1 недобранную полностью
         activeVisters.forEach((v) => {
