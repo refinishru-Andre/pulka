@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { signInWithCode, createCollectionWithCode, AuthError } from '../supabase/auth'
+import { signInWithCode, createCollectionWithCode, AuthError, getCodeHint } from '../supabase/auth'
 
 const API_URL = 'https://pulka-api-178-154-204-13.sslip.io'
 const ANON_KEY =
@@ -25,7 +25,9 @@ type Mode = 'signin' | 'create'
 
 export function Login({ onSkip }: Props) {
   const [mode, setMode] = useState<Mode>('signin')
-  const [code, setCode] = useState('')
+  // Подставляем последнее кодовое слово: после случайного выхода человек
+  // не должен вспоминать его заново (отчёт тестировщика 09.09).
+  const [code, setCode] = useState(() => getCodeHint() ?? '')
   const [showCode, setShowCode] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)

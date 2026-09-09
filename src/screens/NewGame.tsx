@@ -93,7 +93,7 @@ function RulesSummary({ rules }: { rules: Rules }) {
   lines.push(
     rules.vistStyle === 'gentleman'
       ? 'Вист джентльменский: если один пасовал, висты делятся поровну'
-      : 'Вист жлобский: пасовавший не получает ничего',
+      : 'Вист жлобский: взятки забирает вистовавший, пасовавшему — только консоляция',
   )
   lines.push(
     rules.raspasWriteEveryTrick
@@ -169,7 +169,7 @@ function FirstHandPicker({
   return (
     <div>
       <label className="block text-sm text-slate-300 mb-3">Кто на первой руке в первой сдаче</label>
-      <div className={`grid gap-2 ${seats.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+      <div className={`grid gap-2 grid-cols-2 ${seats.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         {seats.map((p, idx) => (
           <button
             key={p}
@@ -370,7 +370,7 @@ export function NewGame({ onCancel, onCreated }: Props = {}) {
             <label className="block text-sm text-slate-300 mb-3">
               Игроки (по часовой стрелке за столом)
             </label>
-            <div className={`grid gap-3 ${setup.seatCount === 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            <div className={`grid gap-3 grid-cols-1 ${setup.seatCount === 4 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
               {setup.seats.map((p, idx) => {
                 const excluded = otherSelected(p)
                 const available = people.filter((pers) => !excluded.includes(pers.id))
@@ -414,7 +414,7 @@ export function NewGame({ onCancel, onCreated }: Props = {}) {
               <div className="text-sm text-slate-300">
                 Новый игрок на место {setup.seats.indexOf(showAddFor) + 1}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
                   autoFocus
@@ -422,24 +422,26 @@ export function NewGame({ onCancel, onCreated }: Props = {}) {
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddNew()}
                   placeholder="Имя игрока"
-                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:border-yellow-500"
+                  className="w-full sm:flex-1 px-3 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:border-yellow-500"
                 />
-                <button
-                  onClick={handleAddNew}
-                  disabled={!newName.trim()}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 rounded-lg font-semibold"
-                >
-                  Добавить
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAddFor(null)
-                    setNewName('')
-                  }}
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg"
-                >
-                  Отмена
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAddNew}
+                    disabled={!newName.trim()}
+                    className="flex-1 sm:flex-none px-4 py-3 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 rounded-lg font-semibold"
+                  >
+                    Добавить
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddFor(null)
+                      setNewName('')
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg"
+                  >
+                    Отмена
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -502,7 +504,7 @@ function GuestNewGame({
 
           <div>
             <label className="block text-sm text-slate-300 mb-3">Имена игроков</label>
-            <div className={`grid gap-3 ${setup.seatCount === 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            <div className={`grid gap-3 grid-cols-1 ${setup.seatCount === 4 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
               {setup.seats.map((p, idx) => (
                 <div key={p}>
                   <div className="text-xs text-slate-500 mb-1">Место {idx + 1}</div>

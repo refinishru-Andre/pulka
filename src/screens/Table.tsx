@@ -302,7 +302,11 @@ export function Table({ onBack }: Props = {}) {
               if (confirmFinish) {
                 finishGame()
                 setConfirmFinish(false)
-                onBack?.()
+                // Остаёмся на столе: он сразу показывает итог и «кто кому
+                // должен». Раньше выкидывало в список, и итог приходилось
+                // открывать заново (отчёт тестировщика 09.09).
+                viewReset()
+                window.scrollTo({ top: 0, behavior: 'smooth' })
               } else {
                 setConfirmFinish(true)
               }
@@ -343,7 +347,7 @@ export function Table({ onBack }: Props = {}) {
   )
 
   return (
-    <div className="min-h-screen p-2 sm:p-4 lg:p-8 pb-28 lg:pb-32">
+    <div className="min-h-screen p-2 sm:p-4 lg:p-8 pb-40 sm:pb-28 lg:pb-32">
       {/* Заголовок */}
       <div className="flex items-center justify-between mb-3 sm:mb-5">
         <div>
@@ -492,19 +496,22 @@ export function Table({ onBack }: Props = {}) {
           return (
             <div
               key={p}
-              className={`bg-slate-800 rounded-2xl p-5 ${playerColor(p)} ${changedClass} ${
+              className={`bg-slate-800 rounded-2xl p-2 sm:p-5 ${playerColor(p)} ${changedClass} ${
                 isFirstHand ? 'ring-2 ring-yellow-500' : ''
               }`}
             >
               <div
-                className={`mb-3 py-2 rounded-lg text-center text-lg font-extrabold tracking-widest ${roleClass}`}
+                className={`mb-2 sm:mb-3 py-1.5 sm:py-2 rounded-lg text-center text-sm sm:text-lg font-extrabold tracking-wide sm:tracking-widest ${roleClass}`}
               >
                 {roleLabel}
               </div>
-              <div className="flex items-baseline justify-between gap-2 mb-4">
-                <div className="text-base sm:text-2xl font-bold truncate">{game.players[p]}</div>
+              {/* На телефоне имя и счёт — в столбик. В одну строку крупное число
+                  съедало имя до одной буквы, а карточка существует ровно ради
+                  того, чтобы видеть, у кого сколько (отчёт тестировщика 09.09). */}
+              <div className="mb-4 sm:flex sm:items-baseline sm:justify-between sm:gap-2">
+                <div className="text-sm sm:text-2xl font-bold truncate">{game.players[p]}</div>
                 <span
-                  className={`text-4xl font-extrabold tabular-nums ${
+                  className={`block sm:inline text-3xl sm:text-4xl font-extrabold tabular-nums ${
                     settlement.net[p] > 0
                       ? 'text-green-400'
                       : settlement.net[p] < 0

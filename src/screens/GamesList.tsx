@@ -10,7 +10,7 @@ import {
   type Orphan,
 } from '../store/orphans'
 import { importFromGames } from '../supabase/people'
-import { getCodeHint, clearCodeHint } from '../supabase/auth'
+import { getCodeHint } from '../supabase/auth'
 import { settle } from '../engine'
 import { seatsOf } from '../engine/types'
 import type { GameState } from '../engine/types'
@@ -49,6 +49,7 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
   const [orphans, setOrphans] = useState<Orphan[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [confirmLogout, setConfirmLogout] = useState(false)
   // id партии → сколько сдач лежит в облаке (для подписи «здесь 10, в облаке 5»)
   const [cloudDeals, setCloudDeals] = useState<Map<string, number>>(new Map())
   const loadGame = useGameStore((s) => s.loadGame)
@@ -144,18 +145,28 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
     setGames((prev) => prev.filter((g) => g.id !== id))
   }
 
+  // Выход спрашивает подтверждение и стоит отдельно от «Новая партия».
+  // Раньше он был в 8 пикселях под ней, без вопроса: промах большим пальцем —
+  // и человек вышел, а поле кодового слова пустое. Забыл слово — потерял всё
+  // (отчёт тестировщика 09.09).
   const handleLogout = async () => {
-    clearCodeHint()
+    if (!confirmLogout) {
+      setConfirmLogout(true)
+      return
+    }
+    // Подсказку с кодовым словом НЕ стираем: она подставится в поле входа.
+    // Слово и так показано в этом же списке («коллекция ...»), секретом оно
+    // не является, а потеря коллекции из-за забытого слова — реальный риск.
     await supabase.auth.signOut()
     window.location.reload()
   }
 
   return (
-    <div className="min-h-screen p-4 lg:p-8">
+    <div className="min-h-screen p-2 sm:p-4 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="sm:flex sm:items-center sm:justify-between mb-4 sm:mb-6">
           <div>
-            <h1 className="text-3xl font-bold">Мои партии</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold">Мои партии</h1>
             {syncOk && (
               <div className="text-sm text-green-400 mt-1 flex items-center gap-1 flex-wrap">
                 <span>●</span>
@@ -168,44 +179,54 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
               </div>
             )}
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid grid-cols-2 sm:flex gap-2 sm:flex-wrap mt-3 sm:mt-0">
             <button
               onClick={() => refresh()}
               disabled={loading}
-              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base"
+              className="px-4 py-3 sm:px-5 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-base"
               title="Обновить список партий"
             >
               {loading ? '...' : '↻'}
             </button>
             <button
               onClick={onOpenCalc}
-              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold"
+              className="px-4 py-3 sm:px-5 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold text-sm sm:text-base"
               title="Посчитать пульку, записанную на бумаге"
             >
               🧮 Калькулятор
             </button>
             <button
               onClick={onOpenStats}
-              className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold"
+              className="px-4 py-3 sm:px-5 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold text-sm sm:text-base"
             >
               📊 Статистика
             </button>
             <button
               onClick={onNewGame}
-              className="px-5 py-3 bg-green-600 hover:bg-green-500 rounded-lg font-bold"
+              className="col-span-2 sm:col-auto px-4 py-3 sm:px-5 bg-green-600 hover:bg-green-500 rounded-lg font-bold"
             >
               + Новая партия
             </button>
-            {syncOk && (
-              <button
-                onClick={handleLogout}
-                className="px-5 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm"
-              >
-                Выйти
-              </button>
-            )}
           </div>
         </div>
+
+        {/* Выход — отдельной строкой внизу шапки, подальше от «Новая партия» */}
+        {syncOk && (
+          <div className="flex justify-end mb-6 -mt-3">
+            <button
+              onClick={handleLogout}
+              onBlur={() => setConfirmLogout(false)}
+              className={`px-4 py-2 rounded-lg text-sm ${
+                confirmLogout
+                  ? 'bg-red-600 hover:bg-red-500 font-bold'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+              }`}
+              title="Выйти из коллекции. Партии останутся в облаке — чтобы вернуться, нужно кодовое слово."
+            >
+              {confirmLogout ? 'Точно выйти? Понадобится кодовое слово' : 'Выйти'}
+            </button>
+          </div>
+        )}
 
         {orphans.length > 0 && (
           <div className="mb-6 bg-yellow-500/10 border border-yellow-500/40 rounded-2xl p-5">
@@ -317,16 +338,19 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
                         {gameTimeLabel(g.createdAt, item.finishedAt)}
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-6 shrink-0">
                       <button
                         onClick={() => handleOpen(item)}
-                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold"
+                        className="px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold"
                       >
                         Открыть
                       </button>
+                      {/* Отодвинута от «Открыть»: подтверждение есть, но промах
+                          по соседней кнопке раздражает (отчёт 09.09) */}
                       <button
                         onClick={() => handleDelete(item.id)}
-                        className="px-3 py-2 bg-slate-700 hover:bg-red-600 rounded-lg text-sm"
+                        className="w-12 h-12 bg-slate-800 hover:bg-red-600 rounded-lg text-base"
+                        title="Удалить партию"
                       >
                         🗑
                       </button>

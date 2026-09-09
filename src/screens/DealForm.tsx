@@ -102,7 +102,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
   )
 
   // Валидация и построение сдачи
-  const { canSubmit, buildDeal } = useMemo(() => {
+  const { canSubmit, buildDeal, blockedBy } = useMemo(() => {
     if (dealType === 'game') {
       const visters = vistersFor(seats, dealer, gamePlayer, dealerVists)
       // Полвиста — фиксированная плата, человек выбывает из розыгрыша.
@@ -119,6 +119,9 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
       const contract: Contract = { kind: 'game', level: gameLevel }
       return {
         canSubmit: ok,
+        blockedBy: ok
+          ? null
+          : `Распределите взятки вистующих: ${vTotal} из ${need}`,
         buildDeal: (): Deal => ({
           type: 'game',
           dealer,
@@ -138,6 +141,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
     if (dealType === 'misere') {
       return {
         canSubmit: true,
+        blockedBy: null,
         buildDeal: (): Deal => ({
           type: 'misere',
           dealer,
@@ -158,6 +162,12 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
         !(players.length === 4 && rules.dealerPlaysRaspasPrikup) || raspasTricks[dealer] <= 2
       return {
         canSubmit: total === 10 && dealerOk,
+        blockedBy:
+          total !== 10
+            ? `Сумма взяток ${total} из 10`
+            : !dealerOk
+              ? 'У сдающего не может быть больше двух взяток'
+              : null,
         buildDeal: (): Deal => ({
           type: 'raspas',
           dealer,
@@ -176,6 +186,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
         (adjTarget !== 'whists' || adjTo !== adjPlayer)
       return {
         canSubmit: valid,
+        blockedBy: valid ? null : 'Укажите число (не ноль) и напишите причину',
         buildDeal: (): Deal => ({
           type: 'adjust',
           dealer,
@@ -191,6 +202,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
     // giveup
     return {
       canSubmit: true,
+      blockedBy: null,
       buildDeal: (): Deal => ({
         type: 'giveup',
         dealer,
@@ -219,11 +231,11 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
       <div className="bg-slate-800 rounded-2xl max-w-4xl w-full flex flex-col" style={{ maxHeight: '95vh' }}>
         {/* HEADER (не скроллится) */}
         <div className="px-3 sm:px-5 pt-4 pb-3 border-b border-slate-700">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xl font-bold">
+          <div className="flex items-start justify-between gap-2 mb-2 flex-wrap">
+            <h2 className="text-lg sm:text-xl font-bold">
               {edit ? `Правка сдачи №${edit.index + 1}` : 'Записать сдачу'}
             </h2>
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-slate-400 order-last sm:order-none w-full sm:w-auto">
               Первая рука: <span className="font-semibold text-yellow-500">{game.players[game.firstHand]}</span>
               <span className="ml-3">Мин: <span className="font-semibold text-slate-200">{minBid}</span></span>
             </div>
@@ -252,10 +264,9 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
               >
                 {t === 'game' && 'Игра'}
                 {t === 'misere' && 'Мизер'}
-                {t === 'raspas' &&
-                  `${raspasName(raspasLevelFor(raspasState), rules)} распас`}
-                {t === 'giveup' && 'Без 3'}
-                {t === 'adjust' && '✏️ Правка'}
+                {t === 'raspas' && 'Распас'}
+                {t === 'giveup' && `Без 3 на ${giveupLevel}`}
+                {t === 'adjust' && '± Поправка'}
               </button>
             ))}
           </div>
@@ -329,7 +340,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
             disabled={!canSubmit}
             className="w-full py-3 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-lg"
           >
-            {canSubmit ? 'Записать' : 'Заполните все поля'}
+            {canSubmit ? 'Записать' : (blockedBy ?? 'Заполните все поля')}
           </button>
         </div>
       </div>
@@ -448,7 +459,7 @@ function GameFormFields(props: {
                   setGamePlayerTricks(i)
                   setGameVisterTricks({ A: 0, B: 0, C: 0, D: 0 })
                 }}
-                className={`py-2 rounded-lg font-semibold text-sm ${
+                className={`py-3 sm:py-2 rounded-lg font-semibold text-base sm:text-sm ${
                   gamePlayerTricks === i ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
                 }`}
               >
@@ -527,7 +538,7 @@ function GameFormFields(props: {
                       key={d}
                       onClick={() => !disabled && setGameVistDecisions({ ...gameVistDecisions, [v]: d })}
                       disabled={disabled}
-                      className={`py-1.5 rounded-lg text-sm ${
+                      className={`py-3 sm:py-1.5 rounded-lg text-sm ${
                         effective === d
                           ? 'bg-yellow-500 text-slate-900'
                           : 'bg-slate-900 border border-slate-700 disabled:opacity-30'
@@ -662,7 +673,7 @@ function MisereFormFields(props: {
             <button
               key={i}
               onClick={() => setMisTricks(i)}
-              className={`py-2 rounded-lg font-semibold text-sm ${
+              className={`py-3 sm:py-2 rounded-lg font-semibold text-base sm:text-sm ${
                 misTricks === i ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
               }`}
             >
@@ -718,25 +729,34 @@ function RaspasFormFields(props: {
             У {game.players[dealer]} только две карты прикупа — трёх взяток быть не может
           </div>
         )}
-        <div className={`grid gap-2 ${players.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        {/* Ряд цифр на каждого вместо кнопок «+/−»: распас 5/3/2 стоил 13
+            касаний, десять из них — тыканье по одной взятке (отчёт 09.09).
+            Теперь три. У сдающего вчетвером цифр только три: 0, 1, 2 — больше
+            двух карт прикупа у него нет. */}
+        <div className="space-y-2">
           {players.map((p) => (
             <div key={p} className="bg-slate-900 rounded-lg p-2">
-              <div className="text-xs mb-1 truncate">{game.players[p]}</div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setTricks({ ...tricks, [p]: Math.max(0, tricks[p] - 1) })}
-                  className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 text-lg font-bold"
-                >
-                  −
-                </button>
-                <div className="text-xl font-bold flex-1 text-center">{tricks[p]}</div>
-                <button
-                  onClick={() => setTricks({ ...tricks, [p]: Math.min(maxFor(p), tricks[p] + 1) })}
-                  disabled={tricks[p] >= maxFor(p)}
-                  className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 disabled:opacity-30 text-lg font-bold"
-                >
-                  +
-                </button>
+              <div className="flex items-baseline justify-between mb-1">
+                <span className="text-xs truncate">{game.players[p]}</span>
+                <span className="text-xs text-slate-500">
+                  {tricks[p]} × {cost} ={' '}
+                  <b className="text-slate-300">{tricks[p] * cost}</b> в гору
+                </span>
+              </div>
+              <div className={`grid gap-1 ${maxFor(p) === 2 ? 'grid-cols-3' : 'grid-cols-6'}`}>
+                {Array.from({ length: maxFor(p) + 1 }, (_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setTricks({ ...tricks, [p]: i })}
+                    className={`py-3 sm:py-2 rounded-lg font-semibold text-base sm:text-sm ${
+                      tricks[p] === i
+                        ? 'bg-yellow-500 text-slate-900'
+                        : 'bg-slate-800 border border-slate-700'
+                    }`}
+                  >
+                    {i}
+                  </button>
+                ))}
               </div>
             </div>
           ))}

@@ -12,6 +12,9 @@ import type { User } from '@supabase/supabase-js'
 
 type Screen = 'games' | 'newGame' | 'table' | 'stats' | 'calc'
 
+// Метка «человек сейчас за столом» — переживает перезагрузку вкладки
+const TABLE_OPEN_KEY = 'pulka-at-table'
+
 // Тонкая полоса поверх всего, пока у планшета нет сети.
 // Коротко и по делу: писать можно, но эту партию нельзя открывать на другом
 // устройстве — иначе две копии разойдутся и одна затрёт другую.
@@ -32,14 +35,40 @@ export default function App() {
   const attachToCloud = useGameStore((s) => s.attachToCloud)
   const [user, setUser] = useState<User | null | undefined>(undefined) // undefined = загрузка
   const [skipAuth, setSkipAuth] = useState(false)
-  // При старте всегда список партий — пользователь сам выбирает что открыть
-  const [screen, setScreen] = useState<Screen>('games')
+  // Возврат за стол после перезагрузки вкладки.
+  //
+  // iPhone выгружает фоновые вкладки: убрал телефон в карман на пару сдач,
+  // достал — браузер перезагрузил страницу, и человек оказывался в списке
+  // партий, хотя играл (отчёт тестировщика 09.09). Запоминаем, что стол был
+  // открыт, и возвращаемся туда, если текущая партия ещё идёт.
+  const [screen, setScreen] = useState<Screen>(() => {
+    try {
+      return window.localStorage.getItem(TABLE_OPEN_KEY) === '1' ? 'table' : 'games'
+    } catch {
+      return 'games'
+    }
+  })
   const [importNotice, setImportNotice] = useState<string | null>(null)
 
   // Пересчёт из истории при загрузке
   useEffect(() => {
     recalculate()
   }, [recalculate])
+
+  // Держим метку в согласии с экраном
+  useEffect(() => {
+    try {
+      if (screen === 'table' && game) window.localStorage.setItem(TABLE_OPEN_KEY, '1')
+      else window.localStorage.removeItem(TABLE_OPEN_KEY)
+    } catch {
+      /* приватный режим — не критично */
+    }
+  }, [screen, game])
+
+  // Партии нет, а метка осталась (партию отложили или удалили) — идём в список
+  useEffect(() => {
+    if (screen === 'table' && !game) setScreen('games')
+  }, [screen, game])
 
   // Отслеживание сессии Supabase
   useEffect(() => {
