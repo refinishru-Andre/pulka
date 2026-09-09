@@ -105,7 +105,7 @@ function RulesSummary({ rules }: { rules: Rules }) {
       rules.minBidLadder.length > 1 ? ' и дальше так же' : ''
     }`,
   )
-  if (rules.prikupBonus) lines.push('Сдатчик получает висты за прикуп')
+  if (rules.prikupBonus) lines.push('Сдающий получает висты за прикуп')
   if (!rules.allowGiveup) lines.push('Уход без трёх запрещён')
   if (!rules.misereBreaksRaspas) lines.push('Мизер распасы не гасит')
   if (rules.vistersDuty[10] > 0) lines.push('Десятерная вистуется')

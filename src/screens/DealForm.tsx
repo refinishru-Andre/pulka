@@ -455,7 +455,9 @@ function GameFormFields(props: {
         </div>
       )}
 
-      {/* Сдающий вступает вистующим — торговля «пас — полвиста — пас» */}
+      {/* Сдающий вистует ВМЕСТО отказавшихся защитников, а не вдобавок к ним:
+          такое бывает только при торговле «пас — полвиста — пас». Слово «и» в
+          подписи было враньём (замечание Андрея 09.09.2026). */}
       {fourHanded && rules.dealerMayVist && (
         <button
           onClick={() => setDealerVists(!dealerVists)}
@@ -466,7 +468,7 @@ function GameFormFields(props: {
           }`}
         >
           {dealerVists ? '✓ ' : ''}
-          Вистует и сдающий ({game.players[dealer]})
+          Вистует сдающий ({game.players[dealer]})
         </button>
       )}
 
@@ -820,7 +822,7 @@ function VistHint({
     text = `Вист вернули после полвиста: все висты и консоляцию пишет ${who(solo)}, ${who(half)} не пишет ничего.`
   } else if (solo && fourHanded && solo === dealer) {
     warn = true
-    text = `Вистует сдатчик: все висты и консоляцию пишет он один, защитники ничего не пишут.`
+    text = `Вистует сдающий: все висты и консоляцию пишет он один, защитники ничего не пишут.`
   } else if (solo && passed.length > 0) {
     text =
       rules.vistStyle === 'gentleman'

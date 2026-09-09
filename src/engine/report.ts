@@ -126,7 +126,7 @@ export function dealBreakdown(
       const why = vistReturned
         ? ` (${who(half!)} уходил за полвиста, вист вернули — дележа нет, полвиста аннулировано)`
         : dealerVisted
-          ? ' (вистовал сдатчик — оба защитника отказались, дележа нет)'
+          ? ' (вистовал сдающий — оба защитника отказались, дележа нет)'
           : ''
       lines.push(
         `${who(soloVister)} вистовал один${why} — пишет все ${total} взяток пары: ${total} × ${perTrick} = ${total * perTrick}.`,
@@ -169,7 +169,7 @@ export function dealBreakdown(
     const word = fast === 1 ? 'взятку' : 'взятки'
     if (fourHanded) {
       lines.push(
-        `Висты за прикуп (за ${fast} ${word}): ${fast} × ${perTrick} = ${pot} — пишет сдатчик, ${who(deal.dealer)}, на играющего.`,
+        `Висты за прикуп (за ${fast} ${word}): ${fast} × ${perTrick} = ${pot} — пишет сдающий, ${who(deal.dealer)}, на играющего.`,
       )
     } else {
       // Втроём премию пишут ОБА соперника по половине, независимо от того, кто
