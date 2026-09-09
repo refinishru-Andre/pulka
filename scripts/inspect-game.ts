@@ -22,7 +22,7 @@ import { createClient } from '@supabase/supabase-js'
 import { readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { applyDeal, emptyStateFrom, minBidFor, RASPAS_LEVEL_NAME } from '../src/engine'
+import { applyDeal, emptyStateFrom, minBidFor, RASPAS_LEVEL_NAME, rulesOf, settle } from '../src/engine'
 import { seatsOf } from '../src/engine/types'
 import type { GameState, Deal, PlayerId, Seats } from '../src/engine/types'
 
@@ -83,7 +83,10 @@ function toGameState(c: CloudGame): GameState {
   return {
     players: c.players,
     seats: c.state.seats,
-    poolLimit: c.pool_limit,
+    // Настоящий размер пули живёт в state: колонка NOT NULL и «без предела»
+    // кладётся в неё нулём. Раньше скрипт брал колонку, получал предел 0 —
+    // и турнирная партия проигрывалась с вечным перекрытием пули.
+    poolLimit: c.state.poolLimit !== undefined ? c.state.poolLimit : c.pool_limit,
     createdAt: new Date(c.created_at).getTime(),
     pool: c.state.pool,
     mount: c.state.mount,
@@ -93,6 +96,9 @@ function toGameState(c: CloudGame): GameState {
     eightRaspasCounter: c.state.eightRaspasCounter,
     deals: c.state.deals,
     finishedManually: c.state.finishedManually,
+    // Без конвенций скрипт считал турнирные партии по домашним правилам
+    rules: c.state.rules,
+    frozenAt: c.state.frozenAt,
   }
 }
 
@@ -202,10 +208,10 @@ function report(c: CloudGame, from: number, to: number) {
       const stored = (deal as { firstHand?: PlayerId }).firstHand
       const mismatch = stored && stored !== before.firstHand ? `  ⚠ В ЗАПИСИ БЫЛО: ${names[stored]}` : ''
       console.log(
-        `   состояние ДО:    ${RASPAS_LABEL[before.raspas]} (мин ${minBidFor(before.raspas)}) · первая рука ${names[before.firstHand]}${mismatch}`,
+        `   состояние ДО:    ${RASPAS_LABEL[before.raspas]} (мин ${minBidFor(before.raspas, rulesOf(game))}) · первая рука ${names[before.firstHand]}${mismatch}`,
       )
       console.log(
-        `   состояние ПОСЛЕ: ${RASPAS_LABEL[next.raspasState]} (мин ${minBidFor(next.raspasState)}) · первая рука ${names[next.firstHand]} ${handMoved ? '← ПЕРЕШЛА' : '← ОСТАЛАСЬ'}`,
+        `   состояние ПОСЛЕ: ${RASPAS_LABEL[next.raspasState]} (мин ${minBidFor(next.raspasState, rulesOf(game))}) · первая рука ${names[next.firstHand]} ${handMoved ? '← ПЕРЕШЛА' : '← ОСТАЛАСЬ'}`,
       )
       if (before.raspas === 'eightRaspas' || next.raspasState === 'eightRaspas') {
         const cnt = seats.map((p) => `${names[p]}=${next.eightRaspasCounter[p]}`).join(' ')
@@ -215,6 +221,15 @@ function report(c: CloudGame, from: number, to: number) {
         .map((p) => `${names[p]}: пуля ${next.pool[p]} гора ${next.mount[p]}`)
         .join(' | ')
       console.log(`   ${money}`)
+      const st = settle(next)
+      console.log(
+        `   итог: ${seats.map((p) => `${names[p]} ${st.net[p] > 0 ? '+' : ''}${st.net[p]}`).join(', ')}`,
+      )
+      if (st.pairwise.length > 0) {
+        console.log(
+          `   должны: ${st.pairwise.map((d) => `${names[d.from]}→${names[d.to]} ${d.amount}`).join(', ')}`,
+        )
+      }
       console.log('')
     }
     state = next
