@@ -162,10 +162,11 @@ export function Table({ onBack }: Props = {}) {
     if (!lastDeal || !lastDelta) return []
     const lines: string[] = []
     if (handBeforeLastDeal) {
+      // В расшифровке важен ТОЛЬКО сдающий: от него зависят висты за прикуп,
+      // консоляция, участие в распасе и поблажка за ноль. Кто сидел первой
+      // рукой, здесь не играет роли и лишь путает (Андрей, 09.09.2026).
       const dealerThen = prevClockwise(handBeforeLastDeal, seats)
-      lines.push(
-        `Сдача ${viewed.deals.length}. Сдавал ${game.players[dealerThen]} · первая рука ${game.players[handBeforeLastDeal]}.`,
-      )
+      lines.push(`Сдача ${viewed.deals.length}. Сдавал ${game.players[dealerThen]}.`)
     }
     if (lastDeal.type === 'game' && lastDeal.contract.kind === 'game') {
       const player = game.players[lastDeal.player]
