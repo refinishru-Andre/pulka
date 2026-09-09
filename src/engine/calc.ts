@@ -5,9 +5,9 @@
 // точности прежнее поведение, что проверяется сверкой reference.test.ts.
 
 import type { Deal, DealDelta, PlayerId, GameLevel, Seats } from './types'
-import { PLAYERS, zeroScores } from './types'
+import { zeroScores } from './types'
 import type { Rules } from './conventions'
-import { HOME_RULES, ladderAt, halfVistTricks } from './conventions'
+import { ladderAt, halfVistTricks } from './conventions'
 
 function emptyDelta(): DealDelta {
   return {
@@ -332,7 +332,9 @@ function calcAdjust(deal: Extract<Deal, { type: 'adjust' }>): DealDelta {
 
 // Основная функция. seats по умолчанию — стол на троих, rules — пресет «Дом»:
 // так считаются все партии, записанные до появления конвенций.
-export function calcDeal(deal: Deal, seats: Seats = PLAYERS, rules: Rules = HOME_RULES): DealDelta {
+// Места и конвенции ОБЯЗАТЕЛЬНЫ: умолчания «стол на троих, правила дома»
+// прятали ошибки — экран, забывший их передать, получал чужой расчёт молча.
+export function calcDeal(deal: Deal, seats: Seats, rules: Rules): DealDelta {
   switch (deal.type) {
     case 'game':
       return calcGame(deal, seats, rules)

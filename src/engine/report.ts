@@ -110,6 +110,29 @@ export function dealBreakdown(
     return lines
   }
 
+  // МИЗЕР. Вистов на мизере не пишут вовсе — только пуля или гора.
+  if (deal.type === 'misere') {
+    if (deal.playerTricks === 0) {
+      lines.push(`${who(deal.player)} сыграл мизер — пуля +${rules.miserePoolCost}. Вистов на мизере не пишут.`)
+    } else {
+      lines.push(
+        `${who(deal.player)} поймали на ${deal.playerTricks} — гора +${deal.playerTricks * rules.misereTrickPenalty} ` +
+          `(${deal.playerTricks} × ${rules.misereTrickPenalty}). Вистов на мизере не пишут.`,
+      )
+    }
+    return lines
+  }
+
+  // УХОД БЕЗ ТРЁХ. Заказ не разыгрывается: гора за три недобранные взятки.
+  if (deal.type === 'giveup' && deal.contract.kind === 'game') {
+    const lvl = deal.contract.level
+    lines.push(
+      `${who(deal.player)} ушёл без трёх на ${lvl}-й — гора +${3 * rules.mountPenalty[lvl]} ` +
+        `(3 × ${rules.mountPenalty[lvl]}). Вистов никто не пишет.`,
+    )
+    return lines
+  }
+
   if (deal.type !== 'game' || deal.contract.kind !== 'game') return lines
 
   const level = deal.contract.level
@@ -199,11 +222,42 @@ export function dealBreakdown(
     }
   }
 
-  // Штраф за недобор нормы
+  // Штраф за недобор нормы — обязательно с именами: кто платит и сколько.
+  // Раньше строка говорила только «недобор пишется в гору по столько-то», и
+  // за столом было непонятно, на кого он лёг.
   if (total < duty) {
+    const short = duty - total
     lines.push(
-      `Норма защиты на ${level}-й — ${duty} взятк${duty === 1 ? 'а' : 'и'}, взяли ${total}. Недобор пишется в гору по ${perMiss} за взятку.`,
+      `Норма защиты на ${level}-й — ${duty} взятк${duty === 1 ? 'а' : 'и'}, взяли ${total}: недобор ${short}.`,
     )
+    const payers = active.filter((v) => !(fourHanded && v === deal.dealer))
+    if (payers.length === 1) {
+      lines.push(
+        `${who(payers[0])} вистовал один — на нём вся норма пары: ${short} × ${perMiss} = ${short * perMiss} в гору.`,
+      )
+    } else if (duty >= 2) {
+      // Норма делится пополам, платит тот, кто не взял своей половины
+      const own = duty / 2
+      const shortOf = (v: PlayerId) => Math.max(0, own - (deal.vistersTricks[v] ?? 0))
+      const totalShort = payers.reduce((s, v) => s + shortOf(v), 0)
+      payers
+        .filter((v) => shortOf(v) > 0)
+        .forEach((v) =>
+          lines.push(
+            `${who(v)} взял ${deal.vistersTricks[v] ?? 0} при своей норме ${own} — в гору ${Math.round((shortOf(v) / totalShort) * short * perMiss)}.`,
+          ),
+        )
+    } else {
+      // Норма пары — одна взятка, делить нечего: отвечают оба вистующих
+      payers
+        .filter((v) => (deal.vistersTricks[v] ?? 0) === 0)
+        .forEach((v) =>
+          lines.push(`${who(v)} не взял ни одной — в гору ${perMiss} (на ${level}-й отвечают оба).`),
+        )
+    }
+    if (fourHanded && active.includes(deal.dealer)) {
+      lines.push(`${who(deal.dealer)} сдавал — за недобор взяток он не отвечает.`)
+    }
   }
 
   // Висты за прикуп (в кодексе — премия за «быстрые взятки»)

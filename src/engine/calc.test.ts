@@ -511,7 +511,7 @@ describe('nextRaspasState + nextFirstHand', () => {
     expect(s.raspasState).toBe('eightRaspas')
     const handBefore = s.firstHand
     s = applyDeal(s, {
-      type: 'giveup', dealer: prevClockwise(handBefore), firstHand: handBefore,
+      type: 'giveup', dealer: prevClockwise(handBefore, PLAYERS), firstHand: handBefore,
       player: 'B', contract: { kind: 'game', level: 8 },
     })
     expect(s.firstHand).toBe(handBefore) // осталась
@@ -693,17 +693,17 @@ describe('8-мерные распасы: счётчик и полный круг
     // игралась ещё по прежней цене и в режим не входит.
     const counter = updateEightCounter(state, newState, 'A')
     expect(counter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
-    expect(isEightRaspasFullCircle(counter)).toBe(false)
+    expect(isEightRaspasFullCircle(counter, PLAYERS)).toBe(false)
   })
 
   it('после того как каждый посидел на 1 руке ≥ 1 раз — полный круг', () => {
     const counter = { A: 1, B: 1, C: 1, D: 0 } as Record<PlayerId, number>
-    expect(isEightRaspasFullCircle(counter)).toBe(true)
+    expect(isEightRaspasFullCircle(counter, PLAYERS)).toBe(true)
   })
 
   it('один сидел много раз, другой ни разу — не полный круг', () => {
     const counter = { A: 3, B: 0, C: 1, D: 0 } as Record<PlayerId, number>
-    expect(isEightRaspasFullCircle(counter)).toBe(false)
+    expect(isEightRaspasFullCircle(counter, PLAYERS)).toBe(false)
   })
 })
 
@@ -860,7 +860,7 @@ describe('Стол на четверых — каркас', () => {
       vistersTricks: { B: 1, C: 2 },
       vistDecisions: { B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal, SEATS4)
+    const delta = calcDeal(deal, SEATS4, HOME_RULES)
     expect(delta.pool.A).toBe(4)
     expect(delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount).toBe(8)
     expect(delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount).toBe(16)
@@ -883,7 +883,7 @@ describe('Стол на четверых — каркас', () => {
       vistersTricks: { B: 3, C: 3 },
       vistDecisions: { B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal, SEATS4)
+    const delta = calcDeal(deal, SEATS4, HOME_RULES)
     expect(delta.pool.A).toBe(0) // не автомат — играющий сел
     expect(delta.mount.A).toBe(8) // недобор 2 × 4
   })
@@ -898,7 +898,7 @@ describe('Стол на четверых — каркас', () => {
       level: 1,
       tricks: { A: 4, B: 3, C: 1, D: 2 },
     }
-    const delta = calcDeal(deal, SEATS4)
+    const delta = calcDeal(deal, SEATS4, HOME_RULES)
     // Минимум 1 у C — амнистия. Цена взятки 1-го распаса = 2.
     expect(delta.mount.A).toBe(6) // (4−1) × 2
     expect(delta.mount.B).toBe(4) // (3−1) × 2
@@ -1072,7 +1072,7 @@ describe('Конвенции партии', () => {
 describe('Восьмерные распасы: сценарий из живой партии', () => {
   const raspas = (firstHand: PlayerId, level: 1 | 2 | 3): Deal => ({
     type: 'raspas',
-    dealer: prevClockwise(firstHand),
+    dealer: prevClockwise(firstHand, PLAYERS),
     firstHand,
     level,
     tricks: { A: 4, B: 3, C: 3, D: 0 },
@@ -1099,7 +1099,7 @@ describe('Восьмерные распасы: сценарий из живой 
     // Кто-то заказал восьмерную и ушёл без трёх — РУКА ОСТАЁТСЯ
     s = applyDeal(s, {
       type: 'giveup',
-      dealer: prevClockwise('C'),
+      dealer: prevClockwise('C', PLAYERS),
       firstHand: 'C',
       player: 'B',
       contract: { kind: 'game', level: 8 },
@@ -1134,7 +1134,7 @@ describe('Восьмерные распасы: сценарий из живой 
     // Заказал восьмерную и сел — рука остаётся
     s = applyDeal(s, {
       type: 'game',
-      dealer: prevClockwise(hand),
+      dealer: prevClockwise(hand, PLAYERS),
       firstHand: hand,
       player: 'A',
       contract: { kind: 'game', level: 8 },
@@ -1148,7 +1148,7 @@ describe('Восьмерные распасы: сценарий из живой 
     // А сыграл — восьмерные кончились, круг досиживать не нужно
     s = applyDeal(s, {
       type: 'game',
-      dealer: prevClockwise(hand),
+      dealer: prevClockwise(hand, PLAYERS),
       firstHand: hand,
       player: 'A',
       contract: { kind: 'game', level: 8 },
@@ -1167,7 +1167,7 @@ describe('Восьмерные распасы: сценарий из живой 
     const hand = s.firstHand
     s = applyDeal(s, {
       type: 'misere',
-      dealer: prevClockwise(hand),
+      dealer: prevClockwise(hand, PLAYERS),
       firstHand: hand,
       player: 'A',
       blind: false,
@@ -1264,7 +1264,7 @@ describe('Восьмерные распасы вчетвером, домашни
 describe('Правка сдачи в середине партии', () => {
   const played = (player: PlayerId, tricks: number, firstHand: PlayerId): Deal => ({
     type: 'game',
-    dealer: prevClockwise(firstHand),
+    dealer: prevClockwise(firstHand, PLAYERS),
     firstHand,
     player,
     contract: { kind: 'game', level: 7 },
@@ -1294,7 +1294,7 @@ describe('Правка сдачи в середине партии', () => {
   it('правка сдачи пересчитывает переход хода и состояние распасов после неё', () => {
     const raspas = (firstHand: PlayerId, level: 1 | 2 | 3): Deal => ({
       type: 'raspas',
-      dealer: prevClockwise(firstHand),
+      dealer: prevClockwise(firstHand, PLAYERS),
       firstHand,
       level,
       tricks: { A: 4, B: 3, C: 3, D: 0 },
@@ -1405,7 +1405,7 @@ describe('Штраф вистующим считается от недобора
   it('один взял больше своей нормы — покрывает недобор партнёра', () => {
     // Шестерная, норма пары 4. Борис взял 3, Виктор 0 — пара недобрала ОДНУ.
     // В гору идёт одна недобранная взятка (2), а не личные два недобора Виктора.
-    const g = calcDeal(deal(6, 7, 3, 0), PLAYERS)
+    const g = calcDeal(deal(6, 7, 3, 0), PLAYERS, HOME_RULES)
     expect(g.mount.B).toBe(0)
     expect(g.mount.C).toBe(2)
     expect(g.mount.B + g.mount.C).toBe(2) // недобор пары 1 × 2
@@ -1413,21 +1413,21 @@ describe('Штраф вистующим считается от недобора
 
   it('оба ниже своей нормы — недобор пары делится по личным', () => {
     // Пара взяла 1 (0 + 1), недобрала 3. Борис недобрал 2, Виктор 1.
-    const g = calcDeal(deal(6, 9, 0, 1), PLAYERS)
+    const g = calcDeal(deal(6, 9, 0, 1), PLAYERS, HOME_RULES)
     expect(g.mount.B).toBe(4)
     expect(g.mount.C).toBe(2)
     expect(g.mount.B + g.mount.C).toBe(6) // недобор пары 3 × 2
   })
 
   it('норма пары выполнена — не платит никто, даже взявший ноль', () => {
-    const g = calcDeal(deal(6, 6, 4, 0), PLAYERS)
+    const g = calcDeal(deal(6, 6, 4, 0), PLAYERS, HOME_RULES)
     expect(g.mount.B).toBe(0)
     expect(g.mount.C).toBe(0)
   })
 
   it('сумма штрафа не зависит от того, вистовал один или двое', () => {
     // Пара взяла 3 при норме 4 — недобор 1, в гору 2. Хоть вдвоём, хоть одному.
-    const both = calcDeal(deal(6, 7, 3, 0), PLAYERS)
+    const both = calcDeal(deal(6, 7, 3, 0), PLAYERS, HOME_RULES)
     const solo: Deal = {
       type: 'game',
       dealer: 'C',
@@ -1445,9 +1445,9 @@ describe('Штраф вистующим считается от недобора
 
   it('на семерной так же', () => {
     // Норма пары 2. Борис взял 2, Виктор 0 — норма выполнена, штрафа нет.
-    expect(calcDeal(deal(7, 8, 2, 0), PLAYERS).mount.C).toBe(0)
+    expect(calcDeal(deal(7, 8, 2, 0), PLAYERS, HOME_RULES).mount.C).toBe(0)
     // Пара взяла 1 — недобрала одну, в гору 4 на взявшего меньше нормы
-    const g = calcDeal(deal(7, 9, 1, 0), PLAYERS)
+    const g = calcDeal(deal(7, 9, 1, 0), PLAYERS, HOME_RULES)
     expect(g.mount.B + g.mount.C).toBe(4)
   })
 })

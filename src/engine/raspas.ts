@@ -2,18 +2,21 @@
 // Всё, что тут решается, зависит от конвенций партии (conventions.ts).
 
 import type { Deal, GameState, PlayerId, RaspasState, Seats } from './types'
-import { PLAYERS, seatsOf, zeroScores } from './types'
+import { seatsOf, zeroScores } from './types'
 import type { Rules } from './conventions'
 import { rulesOf, ladderAt } from './conventions'
 
-// Следующий игрок по часовой. seats — порядок посадки (по умолчанию стол на троих).
-export function nextClockwise(p: PlayerId, seats: Seats = PLAYERS): PlayerId {
+// Следующий игрок по часовой. seats — порядок посадки.
+//
+// МЕСТА ОБЯЗАТЕЛЬНЫ. Умолчание «стол на троих» здесь опаснее всего: забыв его
+// передать, вчетвером мы бы молча выкинули четвёртого игрока из круга.
+export function nextClockwise(p: PlayerId, seats: Seats): PlayerId {
   const idx = seats.indexOf(p)
   return seats[(idx + 1) % seats.length]
 }
 
 // Предыдущий по часовой. Сдающий = предыдущий перед первой рукой.
-export function prevClockwise(p: PlayerId, seats: Seats = PLAYERS): PlayerId {
+export function prevClockwise(p: PlayerId, seats: Seats): PlayerId {
   const idx = seats.indexOf(p)
   return seats[(idx - 1 + seats.length) % seats.length]
 }
@@ -130,7 +133,7 @@ export function updateEightCounter(
 // Проверить: пройден ли «полный круг» на 8-мерных (все ≥ 1)
 export function isEightRaspasFullCircle(
   counter: Record<PlayerId, number>,
-  seats: Seats = PLAYERS,
+  seats: Seats,
 ): boolean {
   return seats.every((p) => counter[p] >= 1)
 }

@@ -2,7 +2,7 @@
 // См. SPEC.md раздел 7
 
 import type { GameState, PlayerId, Seats, Settlement } from './types'
-import { PLAYERS, seatsOf, zeroScores } from './types'
+import { seatsOf, zeroScores } from './types'
 import { rulesOf } from './conventions'
 
 // Вычислить net каждого игрока
@@ -31,7 +31,7 @@ export function calcNet(state: GameState): Record<PlayerId, number> {
 // Попарные долги: кто кому сколько должен (жадный алгоритм)
 export function calcPairwise(
   net: Record<PlayerId, number>,
-  seats: Seats = PLAYERS,
+  seats: Seats,
 ): Array<{ from: PlayerId; to: PlayerId; amount: number }> {
   const debts: Array<{ from: PlayerId; to: PlayerId; amount: number }> = []
   // Отделяем должников и получателей

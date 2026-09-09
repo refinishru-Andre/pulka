@@ -400,18 +400,18 @@ describe('Ручная корректировка', () => {
   })
 
   it('пишет в гору любое число — величина штрафа не ограничена', () => {
-    expect(calcDeal(adj({ amount: 47 })).mount.B).toBe(47)
-    expect(calcDeal(adj({ amount: 4 })).mount.B).toBe(4)
-    expect(calcDeal(adj({ amount: 250 })).mount.B).toBe(250)
+    expect(calcDeal(adj({ amount: 47 }), PLAYERS, FSPR_RULES).mount.B).toBe(47)
+    expect(calcDeal(adj({ amount: 4 }), PLAYERS, FSPR_RULES).mount.B).toBe(4)
+    expect(calcDeal(adj({ amount: 250 }), PLAYERS, FSPR_RULES).mount.B).toBe(250)
   })
 
   it('умеет списывать: отрицательное число', () => {
-    expect(calcDeal(adj({ amount: -13, note: 'пересчёт по договорённости' })).mount.B).toBe(-13)
+    expect(calcDeal(adj({ amount: -13, note: 'пересчёт по договорённости' }), PLAYERS, FSPR_RULES).mount.B).toBe(-13)
   })
 
   it('умеет писать в пулю и в висты', () => {
-    expect(calcDeal(adj({ target: 'pool', amount: 3 })).pool.B).toBe(3)
-    expect(calcDeal(adj({ target: 'whists', to: 'C', amount: 40 })).whists).toEqual([
+    expect(calcDeal(adj({ target: 'pool', amount: 3 }), PLAYERS, FSPR_RULES).pool.B).toBe(3)
+    expect(calcDeal(adj({ target: 'whists', to: 'C', amount: 40 }), PLAYERS, FSPR_RULES).whists).toEqual([
       { from: 'B', to: 'C', amount: 40 },
     ])
   })
