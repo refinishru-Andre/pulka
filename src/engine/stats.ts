@@ -4,6 +4,7 @@
 import type { GameState, Deal } from './types'
 import { seatsOf } from './types'
 import { settle } from './settle'
+import { rulesOf } from './conventions'
 
 // ============ ТИПЫ ============
 
@@ -38,6 +39,22 @@ export interface PlayerStats {
     total: number // сколько раз вистовал
     passed: number // сколько раз пасовал
     half: number // сколько раз полвиста
+    // Взятки засчитываются ТОМУ, КТО ВИСТОВАЛ, а не тому, к кому они физически
+    // пришли. Когда один пасует, второй обычно играет лёжа: пасовавший
+    // открывает карты, и все ходы делает вистующий — взятки от пасовавшего не
+    // зависят вовсе (объяснение Андрея 09.09.2026). Поэтому одиночке идут все
+    // взятки пары и вся её норма; когда вистуют оба, у каждого свои и половина
+    // нормы.
+    tricks: number // набрал, вистуя
+    duty: number // был должен по норме
+    failures: number // сколько раз недобрал (подсел на висте)
+  }
+  // Что человек раздал, когда сдавал. Быстрые взятки в прикупе — это тузы и
+  // марьяжи, за которые играющий получает висты. Какие именно карты, приложение
+  // не хранит: только их число.
+  dealer: {
+    deals: number // сколько раз сдавал
+    fastGiven: number // быстрых взяток отдал в прикуп
   }
   raspas: {
     total: number
@@ -99,7 +116,8 @@ function newPlayerStats(name: string): PlayerStats {
     },
     stalingrads: 0,
     miseres: { total: 0, played: 0, caught: 0, successRate: 0 },
-    vist: { total: 0, passed: 0, half: 0 },
+    vist: { total: 0, passed: 0, half: 0, tricks: 0, duty: 0, failures: 0 },
+    dealer: { deals: 0, fastGiven: 0 },
     raspas: { total: 0, avgTricks: 0, eightMerCount: 0, zeroTricksCount: 0 },
     giveups: 0,
     maxWinInGame: 0,
@@ -266,6 +284,36 @@ function processDeal(deal: Deal, game: GameState, players: Record<string, Player
       else if (decision === 'pass') vs.vist.passed++
       else if (decision === 'half') vs.vist.half++
     }
+
+    // Взятки и норма — тем, кто реально вистовал
+    const rules = rulesOf(game)
+    const duty = rules.vistersDuty[level]
+    const defenders = seatsOf(game).filter(
+      (p) => p !== deal.player && deal.vistDecisions[p] !== undefined,
+    )
+    const rest = defenders.filter(
+      (p) => !(deal.vistDecisions[p] === 'half' && rules.halfVistLevels.includes(level)),
+    )
+    const active = rest.filter((p) => deal.vistDecisions[p] !== 'pass')
+    const pairTricks = rest.reduce((sum, p) => sum + (deal.vistersTricks[p] ?? 0), 0)
+    const pairShort = duty - pairTricks
+    const credit = (p: (typeof rest)[number], tricks: number, own: number, failed: boolean) => {
+      const vs = players[game.players[p]]
+      if (!vs) return
+      vs.vist.tricks += tricks
+      vs.vist.duty += own
+      if (failed) vs.vist.failures++
+    }
+    if (active.length === 1) {
+      // Вистовал один за всю пару: пасовавший лёг, ходы делал вистующий
+      credit(active[0], pairTricks, duty, pairShort > 0)
+    } else if (active.length > 1) {
+      const own = duty / active.length
+      active.forEach((p) => {
+        const mine = deal.vistersTricks[p] ?? 0
+        credit(p, mine, own, pairShort > 0 && mine < own)
+      })
+    }
   } else if (deal.type === 'misere') {
     const playerName = game.players[deal.player]
     const ps = players[playerName]
@@ -288,5 +336,15 @@ function processDeal(deal: Deal, game: GameState, players: Record<string, Player
     const ps = players[playerName]
     if (!ps) return
     ps.giveups++
+  }
+
+  // Кто сдавал и сколько подарил играющему быстрых взяток в прикупе.
+  // Ручная корректировка сдающего не имеет — её пропускаем.
+  if (deal.type !== 'adjust') {
+    const ds = players[game.players[deal.dealer]]
+    if (ds) {
+      ds.dealer.deals++
+      if (deal.type === 'game') ds.dealer.fastGiven += deal.prikupFastTricks ?? 0
+    }
   }
 }

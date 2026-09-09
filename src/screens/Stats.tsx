@@ -230,7 +230,7 @@ function PlayerDetail({ p }: { p: PlayerStats }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         {/* Мизеры */}
         <div className="bg-slate-900 rounded-lg p-4">
           <div className="text-xs text-slate-500 uppercase mb-2">Мизер</div>
@@ -276,6 +276,42 @@ function PlayerDetail({ p }: { p: PlayerStats }) {
             <div>
               Полвиста: <b>{p.vist.half}</b>
             </div>
+            {p.vist.duty > 0 && (
+              <>
+                <div className="pt-1 border-t border-slate-800 mt-2">
+                  Взял на висте: <b>{p.vist.tricks}</b>{' '}
+                  <span className="text-slate-500">при норме {p.vist.duty}</span>
+                </div>
+                <div>
+                  {p.vist.tricks >= p.vist.duty ? 'Перебор: ' : 'Недобор: '}
+                  <b className={p.vist.tricks >= p.vist.duty ? 'text-green-400' : 'text-red-400'}>
+                    {p.vist.tricks >= p.vist.duty ? '+' : ''}
+                    {p.vist.tricks - p.vist.duty}
+                  </b>
+                </div>
+                <div>
+                  Подсел на висте: <b>{p.vist.failures}</b> раз
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Что раздал, когда сдавал */}
+        <div className="bg-slate-900 rounded-lg p-4">
+          <div className="text-xs text-slate-500 uppercase mb-2">Когда сдавал</div>
+          <div className="text-sm space-y-1">
+            <div>
+              Сдавал: <b>{p.dealer.deals}</b> раз
+            </div>
+            {p.dealer.fastGiven > 0 && (
+              <div>
+                Отдал в прикуп быстрых взяток: <b className="text-red-400">{p.dealer.fastGiven}</b>
+                <div className="text-xs text-slate-500 mt-1">
+                  тузы и марьяжи, за которые играющий получил висты
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
