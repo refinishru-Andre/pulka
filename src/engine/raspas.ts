@@ -4,7 +4,7 @@
 import type { Deal, GameState, PlayerId, RaspasState, Seats } from './types'
 import { PLAYERS, seatsOf, zeroScores } from './types'
 import type { Rules } from './conventions'
-import { HOME_RULES, rulesOf, ladderAt } from './conventions'
+import { rulesOf, ladderAt } from './conventions'
 
 // Следующий игрок по часовой. seats — порядок посадки (по умолчанию стол на троих).
 export function nextClockwise(p: PlayerId, seats: Seats = PLAYERS): PlayerId {
@@ -152,12 +152,17 @@ function ladderStep(raspasState: RaspasState): number {
 
 // Минимальный заказ по состоянию.
 // Дом: 6 → 7 → 8 и дальше 8. ФСПР: 6 → 7 и дальше 7 («выход затруднённый»).
-export function minBidFor(raspasState: RaspasState, rules: Rules = HOME_RULES): number {
+//
+// ПРАВИЛА ОБЯЗАТЕЛЬНЫ. Раньше здесь стояло `rules = HOME_RULES`, и экран,
+// забывший их передать, тихо показывал домашнюю лесенку: на турнире требовал
+// заказ от 8 и убирал семерную из списка. Такую ошибку должен ловить
+// компилятор, а не человек за столом (09.09.2026).
+export function minBidFor(raspasState: RaspasState, rules: Rules): number {
   return ladderAt(rules.minBidLadder, ladderStep(raspasState))
 }
 
 // Цена взятки на распасе в текущем состоянии: 2 → 4 → 6 и дальше 6
-export function raspasCostFor(raspasState: RaspasState, rules: Rules = HOME_RULES): number {
+export function raspasCostFor(raspasState: RaspasState, rules: Rules): number {
   return ladderAt(rules.raspasCostLadder, ladderStep(raspasState))
 }
 
@@ -212,7 +217,7 @@ const BID_ADJ: Record<number, string> = {
 // Дома: «шестерной» / «семерной» / «восьмерной».
 // Турнир (6-7-7): «1-й» / «2-й» / «3-й и дальше» — потому что «восьмерных
 // распасов» там не бывает, заказ так и стоит на семи.
-export function raspasName(level: 1 | 2 | 3, rules: Rules = HOME_RULES): string {
+export function raspasName(level: 1 | 2 | 3, rules: Rules): string {
   if (ladderNamesDistinct(rules)) {
     return BID_ADJ[ladderAt(rules.minBidLadder, level - 1)] ?? `${level}-й`
   }
@@ -221,7 +226,7 @@ export function raspasName(level: 1 | 2 | 3, rules: Rules = HOME_RULES): string 
 
 // Подпись текущего состояния для экрана. Говорит две вещи: от чего заказывать
 // и действует ли особое правило восьмерных.
-export function raspasStateLabel(raspasState: RaspasState, rules: Rules = HOME_RULES): string {
+export function raspasStateLabel(raspasState: RaspasState, rules: Rules): string {
   const min = minBidFor(raspasState, rules)
   switch (raspasState) {
     case 'normal':

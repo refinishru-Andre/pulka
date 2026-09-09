@@ -48,7 +48,7 @@ describe('calcDeal — Игра сыграна', () => {
       vistersTricks: { A: 1, B: 2, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.C).toBe(4) // сыгранная 7 = 4 в пулю
     // A за 1 = 8; B за 2 = 16. Обязательство 7-й = 2 на пару, по 1 на игрока.
     // A взял 1 = норму, B взял 2 (переработал), штрафов нет.
@@ -71,7 +71,7 @@ describe('calcDeal — Игра сыграна', () => {
       vistersTricks: { A: 0, B: 1, C: 2, D: 0 }, // B пас взял 1, C вист взял 2
       vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(2)
     // C — единственный активный, пишет за ВСЮ пару 3 взятки = 3 × 4 = 12
     const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
@@ -94,7 +94,7 @@ describe('calcDeal — Игра сыграна', () => {
       vistersTricks: { A: 0, B: 1, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(6)
     // Пара взяла 1 = обязательство, штрафа нет
     expect(delta.mount.B).toBe(0)
@@ -115,7 +115,7 @@ describe('calcDeal — Игра сыграна', () => {
       vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(6)
     expect(delta.mount.B).toBe(6)
     expect(delta.mount.C).toBe(6)
@@ -132,7 +132,7 @@ describe('calcDeal — Игра сыграна', () => {
       vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(8)
     expect(delta.mount.C).toBe(8) // весь штраф на единственного активного
     expect(delta.mount.B).toBe(0)
@@ -149,7 +149,7 @@ describe('calcDeal — Игра сыграна', () => {
       vistersTricks: { A: 0, B: 1, C: 1, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(2)
     // Каждый взял 1 при норме 2 → недобрал 1 → штраф 2 в гору обоим
     expect(delta.mount.B).toBe(2)
@@ -172,7 +172,7 @@ describe('calcDeal — Игра сыграна', () => {
       vistersTricks: { A: 0, B: 1, C: 2, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' }, // оба вистуют
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(2)
     // B взял 1 = 4 на A; C взял 2 = 8 на A
     const bToA = delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount
@@ -196,7 +196,7 @@ describe('calcDeal — Игра сыграна', () => {
       vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(8)
     // duty=1, пара 0 → каждый взял 0 → штраф полный 8 каждому (пол не считается)
     expect(delta.mount.B).toBe(8)
@@ -216,7 +216,7 @@ describe('calcDeal — Ремиз играющего', () => {
       vistersTricks: { A: 0, B: 2, C: 3, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.mount.A).toBe(4) // недобрал 1 × 4 = 4 в гору
     expect(delta.pool.A).toBe(0)
     // B за 2 взятки × 4 = 8; C за 3 × 4 = 12. Консоляция 1 × 4 = 4 обоим
@@ -237,7 +237,7 @@ describe('calcDeal — Ремиз играющего', () => {
       vistersTricks: { A: 1, B: 2, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'vist', C: 'vist' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.mount.C).toBe(2 * 16) // недобрал 2 × 16 = 32
     // A за 1 = 16, B за 2 = 32. Консоляция 2 × 16 = 32 обоим
     const aToC = delta.whists.filter((w) => w.from === 'A' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
@@ -259,7 +259,7 @@ describe('Автомат-сценарии (без розыгрыша)', () => {
       vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'pass' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(2)
     expect(delta.mount).toEqual({ A: 0, B: 0, C: 0, D: 0 })
     expect(delta.whists).toHaveLength(0)
@@ -276,7 +276,7 @@ describe('Автомат-сценарии (без розыгрыша)', () => {
       vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'pass' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(8)
     expect(delta.whists).toHaveLength(0)
   })
@@ -292,7 +292,7 @@ describe('Автомат-сценарии (без розыгрыша)', () => {
       vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'pass', C: 'half' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(2)
     // Полвистовому (C) за 2 взятки × 4 = 8 на A
     const cToA = delta.whists.find((w) => w.from === 'C' && w.to === 'A')?.amount
@@ -312,7 +312,7 @@ describe('Автомат-сценарии (без розыгрыша)', () => {
       vistersTricks: { A: 0, B: 0, C: 0, D: 0 },
       vistDecisions: { A: 'vist', B: 'half', C: 'pass' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.A).toBe(4)
     // Полвистовому (B) за 1 взятку × 8 = 8 на A
     const bToA = delta.whists.find((w) => w.from === 'B' && w.to === 'A')?.amount
@@ -332,7 +332,7 @@ describe('calcDeal — Сталинград (6♠)', () => {
       vistersTricks: { A: 3, B: 2, C: 0, D: 0 },
       vistDecisions: { A: 'pass', B: 'pass', C: 'vist' }, // оба «пас», но 6♠ → форс вист
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.mount.C).toBe(4) // ремиз без 1
     // A за 3 = 12; B за 2 = 8. Консоляция 1×4=4 обоим (оба сталингр. считаются активными)
     const aToC = delta.whists.filter((w) => w.from === 'A' && w.to === 'C').reduce((s, w) => s + w.amount, 0)
@@ -352,7 +352,7 @@ describe('calcDeal — Мизер', () => {
       blind: false,
       playerTricks: 0,
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.B).toBe(10)
     expect(delta.mount).toEqual({ A: 0, B: 0, C: 0, D: 0 })
   })
@@ -366,7 +366,7 @@ describe('calcDeal — Мизер', () => {
       blind: false,
       playerTricks: 2,
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.pool.B).toBe(0)
     expect(delta.mount.B).toBe(40) // 2 × 20 = 40
     expect(delta.whists).toHaveLength(0) // вистующим ничего не пишется
@@ -420,7 +420,7 @@ describe('calcDeal — Распасы', () => {
       level: 1,
       tricks: { A: 4, B: 3, C: 3, D: 0 },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.mount.A).toBe(2) // (4-3) × 2 = 2
     expect(delta.mount.B).toBe(0)
     expect(delta.mount.C).toBe(0)
@@ -434,7 +434,7 @@ describe('calcDeal — Распасы', () => {
       level: 2,
       tricks: { A: 5, B: 4, C: 1, D: 0 },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.mount.A).toBe((5 - 1) * 4) // 16
     expect(delta.mount.B).toBe((4 - 1) * 4) // 12
     expect(delta.mount.C).toBe(0)
@@ -448,7 +448,7 @@ describe('calcDeal — Распасы', () => {
       level: 3,
       tricks: { A: 6, B: 2, C: 2, D: 0 },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.mount.A).toBe((6 - 2) * 6) // 24
     expect(delta.mount.B).toBe(0)
     expect(delta.mount.C).toBe(0)
@@ -464,7 +464,7 @@ describe('calcDeal — Уход без 3', () => {
       player: 'A',
       contract: { kind: 'game', level: 6, suit: 'C' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.mount.A).toBe(12) // 3 × 4 = 12
     expect(delta.pool.A).toBe(0)
     expect(delta.whists).toHaveLength(0)
@@ -478,7 +478,7 @@ describe('calcDeal — Уход без 3', () => {
       player: 'B',
       contract: { kind: 'game', level: 8, suit: 'NT' },
     }
-    const delta = calcDeal(deal)
+    const delta = calcDeal(deal, PLAYERS, HOME_RULES)
     expect(delta.mount.B).toBe(36) // 3 × 12 = 36
   })
 })
@@ -500,7 +500,7 @@ describe('nextRaspasState + nextFirstHand', () => {
     const deal: Deal = { type: 'raspas', dealer: 'C', firstHand: 'A', level: 2, tricks: { A: 4, B: 3, C: 3, D: 0 } }
     expect(nextRaspasState(state, deal)).toBe('eightRaspas')
     // И минимум, и цена взятки при этом те же, что были в старой ступени
-    expect(minBidFor('eightRaspas')).toBe(8)
+    expect(minBidFor('eightRaspas', HOME_RULES)).toBe(8)
   })
 
   it('уход без трёх на 8-мерных оставляет руку на месте', () => {
@@ -1085,13 +1085,13 @@ describe('Восьмерные распасы: сценарий из живой 
     // Первый распас: минимум становится 7
     s = applyDeal(s, raspas('A', 1))
     expect(s.raspasState).toBe('afterFirst')
-    expect(minBidFor(s.raspasState)).toBe(7)
+    expect(minBidFor(s.raspasState, HOME_RULES)).toBe(7)
     expect(s.firstHand).toBe('B')
 
     // Второй распас: минимум 8 — значит УЖЕ восьмерные, а не «после 2-го»
     s = applyDeal(s, raspas('B', 2))
     expect(s.raspasState).toBe('eightRaspas')
-    expect(minBidFor(s.raspasState)).toBe(8)
+    expect(minBidFor(s.raspasState, HOME_RULES)).toBe(8)
     expect(s.firstHand).toBe('C')
     // Счётчик круга пуст: сдача, которая привела сюда, не в счёт
     expect(s.eightRaspasCounter).toEqual({ A: 0, B: 0, C: 0, D: 0 })
@@ -1121,7 +1121,7 @@ describe('Восьмерные распасы: сценарий из живой 
     // И только когда сел последний — восьмерные кончаются
     s = applyDeal(s, raspas('B', 3))
     expect(s.raspasState).toBe('normal')
-    expect(minBidFor(s.raspasState)).toBe(6)
+    expect(minBidFor(s.raspasState, HOME_RULES)).toBe(6)
   })
 
   it('несыгранная восьмерная тоже оставляет руку, а сыгранная гасит распасы сразу', () => {
@@ -1157,7 +1157,7 @@ describe('Восьмерные распасы: сценарий из живой 
       vistDecisions: { B: 'vist', C: 'vist' },
     })
     expect(s.raspasState).toBe('normal')
-    expect(minBidFor(s.raspasState)).toBe(6)
+    expect(minBidFor(s.raspasState, HOME_RULES)).toBe(6)
   })
 
   it('пойманный мизер на восьмерных тоже оставляет руку', () => {
@@ -1219,7 +1219,7 @@ describe('Восьмерные распасы вчетвером, домашни
     // И только когда сел четвёртый — восьмерные кончаются
     s = applyDeal(s, raspas('B', 3))
     expect(s.raspasState).toBe('normal')
-    expect(minBidFor(s.raspasState)).toBe(6)
+    expect(minBidFor(s.raspasState, HOME_RULES)).toBe(6)
   })
 
   it('уход без трёх оставляет руку и вчетвером', () => {
@@ -1309,7 +1309,7 @@ describe('Правка сдачи в середине партии', () => {
     const corrected: Deal[] = [played('A', 7, 'A'), deals[1]]
     const after = recomputeState({ ...initState(), deals: corrected })
     expect(after.raspasState).toBe('afterFirst')
-    expect(minBidFor(after.raspasState)).toBe(7)
+    expect(minBidFor(after.raspasState, HOME_RULES)).toBe(7)
 
     // И цена взятки пересчиталась: распас стал шестерным, а не семерным,
     // хотя в записи у него по-прежнему стоит уровень 2
@@ -1438,7 +1438,7 @@ describe('Штраф вистующим считается от недобора
       vistersTricks: { B: 3, C: 0 },
       vistDecisions: { B: 'vist', C: 'pass' },
     }
-    const one = calcDeal(solo, PLAYERS)
+    const one = calcDeal(solo, PLAYERS, HOME_RULES)
     expect(both.mount.B + both.mount.C).toBe(2)
     expect(one.mount.B + one.mount.C).toBe(2)
   })
