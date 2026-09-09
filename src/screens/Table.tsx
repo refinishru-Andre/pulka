@@ -235,7 +235,7 @@ export function Table({ onBack }: Props = {}) {
         <div>
           <h1 className="text-xl sm:text-3xl font-bold">Людочка</h1>
           <div className="text-base text-slate-400 flex items-center gap-3 flex-wrap mt-1">
-            <span>{game.poolLimit === null ? 'Пуля без предела' : `Пуля до ${game.poolLimit}`}</span>
+            <span>{game.poolLimit === null ? 'Игра на время' : `Пуля до ${game.poolLimit}`}</span>
             <span>·</span>
             <span>
               сдач: {viewingHistory ? viewIndex : game.deals.length}/{game.deals.length}

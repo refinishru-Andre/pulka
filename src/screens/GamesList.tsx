@@ -232,7 +232,7 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
                       {seatsOf(o.game).map((p) => o.game.players[p]).join(' · ')}
                     </div>
                     <div className="text-sm text-slate-400">
-                      {o.game.poolLimit === null ? 'Пуля без предела' : `Пуля до ${o.game.poolLimit}`} ·
+                      {o.game.poolLimit === null ? 'Игра на время' : `Пуля до ${o.game.poolLimit}`} ·
                       сдач: {o.game.deals.length} ·{' '}
                       {new Date(o.game.createdAt).toLocaleString('ru')}
                     </div>
