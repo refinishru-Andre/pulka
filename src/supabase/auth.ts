@@ -10,7 +10,7 @@ import { supabase } from './client'
 
 const HINT_KEY = 'pulka-code-hint'
 
-export type AuthErrorKind = 'network' | 'not_found' | 'unknown'
+export type AuthErrorKind = 'network' | 'not_found' | 'taken' | 'unknown'
 
 export class AuthError extends Error {
   kind: AuthErrorKind
@@ -102,9 +102,32 @@ export async function signInWithCode(code: string): Promise<void> {
 }
 
 // СОЗДАНИЕ новой коллекции — только по явному нажатию отдельной кнопки.
-// Если такое слово уже занято — просто входим в него (пароль выводится из того же слова).
+//
+// СЛОВО ПРОВЕРЯЕТСЯ НА ЗАНЯТОСТЬ. Раньше занятое слово молча ВПУСКАЛО в чужую
+// коллекцию: пароль выводится из того же слова, значит вход подходил. Пока
+// приложением пользовались трое, это было незаметно. Как только ссылку раздают
+// друзьям, два человека, придумавших «преферанс», оказались бы в одной записи
+// и писали бы друг другу в партии (решение Андрея 09.09.2026).
+//
+// Проверка простая: пробуем войти этим словом. Вход прошёл — слово занято,
+// сразу выходим обратно, чтобы человек не оказался в чужой коллекции даже на
+// мгновение, и просим придумать другое.
 export async function createCollectionWithCode(code: string): Promise<{ joinedExisting: boolean }> {
   const cred = await credentialsFor(code)
+
+  const probe = await supabase.auth.signInWithPassword(cred)
+  if (!probe.error && probe.data.session) {
+    await supabase.auth.signOut()
+    throw new AuthError(
+      'taken',
+      'Это кодовое слово уже занято — по нему есть коллекция. Придумай другое, подлиннее и своё: например «синий-чайник-77». Если коллекция твоя — входи кнопкой «Войти», а не создавай новую.',
+    )
+  }
+  const probeMsg = probe.error?.message ?? ''
+  if (isNetworkError(probeMsg)) {
+    throw new AuthError('network', 'Нет связи с сервером. Проверь интернет и попробуй ещё раз.')
+  }
+
   const signUp = await supabase.auth.signUp(cred)
 
   if (signUp.error) {
@@ -112,13 +135,15 @@ export async function createCollectionWithCode(code: string): Promise<{ joinedEx
     if (isNetworkError(msg)) {
       throw new AuthError('network', 'Нет связи с сервером. Проверь интернет и попробуй ещё раз.')
     }
-    // Слово уже занято — это не ошибка, просто входим
+    // Подстраховка: сервер сам сказал, что такое слово уже есть
     if (
       msg.toLowerCase().includes('already registered') ||
       (signUp.error as { code?: string }).code === 'user_already_exists'
     ) {
-      await signInWithCode(code)
-      return { joinedExisting: true }
+      throw new AuthError(
+        'taken',
+        'Это кодовое слово уже занято. Придумай другое, подлиннее и своё.',
+      )
     }
     throw new AuthError('unknown', msg)
   }
