@@ -152,8 +152,12 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
       // Вчетвером сдающий тоже берёт взятки — он ходит картами прикупа
       const players = raspasPlayers(seats, dealer, rules.dealerPlaysRaspasPrikup)
       const total = players.reduce((sum, p) => sum + raspasTricks[p], 0)
+      // У сдающего на руках только две карты прикупа — больше двух взяток он
+      // взять не может физически (замечание Андрея 09.09.2026).
+      const dealerOk =
+        !(players.length === 4 && rules.dealerPlaysRaspasPrikup) || raspasTricks[dealer] <= 2
       return {
-        canSubmit: total === 10,
+        canSubmit: total === 10 && dealerOk,
         buildDeal: (): Deal => ({
           type: 'raspas',
           dealer,
@@ -685,6 +689,10 @@ function RaspasFormFields(props: {
   const total = players.reduce((sum, p) => sum + tricks[p], 0)
   const tricksOk = total === 10
   const cost = rules.raspasCostLadder[Math.min(level - 1, rules.raspasCostLadder.length - 1)]
+  // Сдающий вчетвером ходит только двумя картами прикупа: больше двух взяток
+  // у него быть не может. Остальные играют десятью картами.
+  const dealerLimited = players.length === 4 && rules.dealerPlaysRaspasPrikup
+  const maxFor = (p: PlayerId) => (dealerLimited && p === dealer ? 2 : 10)
   const levelLabel = raspasName(level, rules)
 
   return (
@@ -694,7 +702,8 @@ function RaspasFormFields(props: {
         {rules.raspasWriteEveryTrick ? 'в гору за каждую взятку' : 'амнистия минимума'}
         {players.length === 4 && (
           <div className="text-xs text-slate-400 mt-1">
-            Сдаёт {game.players[dealer]} — ходит картами прикупа и пишет взятки наравне со всеми
+            Сдаёт {game.players[dealer]} — ходит двумя картами прикупа, пишет взятки наравне со
+            всеми. Больше двух взяток у него быть не может.
           </div>
         )}
       </div>
@@ -703,6 +712,12 @@ function RaspasFormFields(props: {
         <div className={`text-xs mb-1 ${tricksOk ? 'text-slate-400' : 'text-red-400'}`}>
           Взятки каждого — сумма {total}/10
         </div>
+        {/* Может всплыть при правке старой сдачи, записанной до этой проверки */}
+        {dealerLimited && tricks[dealer] > 2 && (
+          <div className="text-xs mb-1 text-red-400 font-semibold">
+            У {game.players[dealer]} только две карты прикупа — трёх взяток быть не может
+          </div>
+        )}
         <div className={`grid gap-2 ${players.length === 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
           {players.map((p) => (
             <div key={p} className="bg-slate-900 rounded-lg p-2">
@@ -716,8 +731,9 @@ function RaspasFormFields(props: {
                 </button>
                 <div className="text-xl font-bold flex-1 text-center">{tricks[p]}</div>
                 <button
-                  onClick={() => setTricks({ ...tricks, [p]: Math.min(10, tricks[p] + 1) })}
-                  className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 text-lg font-bold"
+                  onClick={() => setTricks({ ...tricks, [p]: Math.min(maxFor(p), tricks[p] + 1) })}
+                  disabled={tricks[p] >= maxFor(p)}
+                  className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 disabled:opacity-30 text-lg font-bold"
                 >
                   +
                 </button>
