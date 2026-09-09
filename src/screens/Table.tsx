@@ -67,6 +67,10 @@ export function Table({ onBack }: Props = {}) {
   const [copied, setCopied] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState(false)
+  // На телефоне меню кнопок занимало пол-экрана, а нужно редко: за столом жмут
+  // только «Записать сдачу» внизу (замечание Андрея 09.09.2026). Свернули.
+  // На планшете и шире меню всегда открыто — это состояние туда не заглядывает.
+  const [menuOpen, setMenuOpen] = useState(false)
 
   // Кто за столом: трое или четверо. Читаем из партии, а не из константы.
   const seats = seatsOf(game)
@@ -228,54 +232,11 @@ export function Table({ onBack }: Props = {}) {
   }
   const explanation = explainLastDeal()
 
-  return (
-    <div className="min-h-screen p-2 sm:p-4 lg:p-8 pb-28 lg:pb-32">
-      {/* Заголовок */}
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-xl sm:text-3xl font-bold">Людочка</h1>
-          <div className="text-base text-slate-400 flex items-center gap-3 flex-wrap mt-1">
-            <span>{game.poolLimit === null ? 'Игра на время' : `Пуля до ${game.poolLimit}`}</span>
-            <span>·</span>
-            <span>
-              сдач: {viewingHistory ? viewIndex : game.deals.length}/{game.deals.length}
-            </span>
-            <span
-              className={`text-yellow-400 font-semibold ${viewingHistory ? '' : 'invisible'}`}
-            >
-              (просмотр истории — не текущий момент)
-            </span>
-            <span>·</span>
-            {(() => {
-              if (isFinished && !viewingHistory) {
-                return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
-              }
-              // Без предела пуля не кончается: играют по времени, считают по кнопке
-              if (viewed.poolLimit === null) {
-                return <span className="text-slate-400">играем по времени</span>
-              }
-              const sumPool = seats.reduce((s, p) => s + viewed.pool[p], 0)
-              const inGame = viewed.poolLimit * seats.length - sumPool
-              if (inGame <= 0 && !viewingHistory) {
-                return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
-              }
-              const critical = inGame <= 5
-              return (
-                <span className={critical ? 'font-bold text-red-400 text-lg' : ''}>
-                  в игре: {inGame}
-                </span>
-              )
-            })()}
-            <SyncBadge />
-          </div>
-        </div>
-        {/* Ряд кнопок с ПОСТОЯННЫМ составом.
-            Раньше кнопки появлялись и исчезали по обстановке, и весь ряд ехал:
-            нажал «◀ Сдача», кнопки сдвинулись, второй клик попадал уже в другую.
-            Теперь набор всегда один и тот же, неподходящие просто гаснут.
-            Подтверждение тоже не добавляет кнопок — оно на той же кнопке,
-            вторым нажатием. */}
-        <div className="flex gap-2 flex-wrap">
+  // Набор кнопок объявлен один раз и рисуется в двух местах: свёрнутым меню на
+  // телефоне и обычной строкой на широком экране. Дублировать разметку нельзя —
+  // разъедутся.
+  const menuButtons = (
+    <>
           <button
             onClick={onBack}
             disabled={!onBack}
@@ -378,7 +339,70 @@ export function Table({ onBack }: Props = {}) {
           >
             {confirmReset ? 'Точно отложить?' : 'Отложить и начать новую'}
           </button>
+    </>
+  )
+
+  return (
+    <div className="min-h-screen p-2 sm:p-4 lg:p-8 pb-28 lg:pb-32">
+      {/* Заголовок */}
+      <div className="flex items-center justify-between mb-3 sm:mb-5">
+        <div>
+          <h1 className="text-xl sm:text-3xl font-bold">Людочка</h1>
+          <div className="text-sm sm:text-base text-slate-400 flex items-center gap-2 sm:gap-3 flex-wrap mt-1">
+            <span>{game.poolLimit === null ? 'Игра на время' : `Пуля до ${game.poolLimit}`}</span>
+            <span>·</span>
+            <span>
+              сдач: {viewingHistory ? viewIndex : game.deals.length}/{game.deals.length}
+            </span>
+            <span
+              className={`text-yellow-400 font-semibold ${viewingHistory ? '' : 'invisible'}`}
+            >
+              (просмотр истории — не текущий момент)
+            </span>
+            <span>·</span>
+            {(() => {
+              if (isFinished && !viewingHistory) {
+                return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
+              }
+              // Без предела пуля не кончается: играют по времени, считают по кнопке
+              if (viewed.poolLimit === null) {
+                return <span className="text-slate-400">играем по времени</span>
+              }
+              const sumPool = seats.reduce((s, p) => s + viewed.pool[p], 0)
+              const inGame = viewed.poolLimit * seats.length - sumPool
+              if (inGame <= 0 && !viewingHistory) {
+                return <span className="font-bold text-green-400 text-lg">Партия окончена</span>
+              }
+              const critical = inGame <= 5
+              return (
+                <span className={critical ? 'font-bold text-red-400 text-lg' : ''}>
+                  в игре: {inGame}
+                </span>
+              )
+            })()}
+            <SyncBadge />
+          </div>
         </div>
+        {/* Ряд кнопок с ПОСТОЯННЫМ составом.
+            Раньше кнопки появлялись и исчезали по обстановке, и весь ряд ехал:
+            нажал «◀ Сдача», кнопки сдвинулись, второй клик попадал уже в другую.
+            Теперь набор всегда один и тот же, неподходящие просто гаснут.
+            Подтверждение тоже не добавляет кнопок — оно на той же кнопке,
+            вторым нажатием. */}
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="sm:hidden px-3 py-2.5 bg-slate-700 rounded-lg text-sm font-semibold shrink-0"
+        >
+          {menuOpen ? '✕ Меню' : '☰ Меню'}
+        </button>
+        {/* Широкий экран: тот же набор кнопок остаётся справа от заголовка,
+            ровно там же, где и был. */}
+        <div className="hidden sm:flex gap-2 flex-wrap">{menuButtons}</div>
+      </div>
+
+      {/* Телефон: меню раскрывается кнопкой и ложится в две колонки */}
+      <div className={`${menuOpen ? 'grid' : 'hidden'} grid-cols-2 gap-2 mb-4 sm:hidden`}>
+        {menuButtons}
       </div>
 
       {/* Связь с облаком потеряна. Данные не пропали — они в памяти этого
@@ -413,7 +437,7 @@ export function Table({ onBack }: Props = {}) {
       )}
 
       {/* Состояние распасов */}
-      <div className="mb-5 px-5 py-3 bg-slate-800 rounded-lg text-center text-base">
+      <div className="mb-3 sm:mb-5 px-3 sm:px-5 py-2 sm:py-3 bg-slate-800 rounded-lg text-center text-sm sm:text-base">
         <span className="text-slate-400">Состояние: </span>
         <span className="font-bold">{raspasStateLabel(viewed.raspasState, rulesOf(viewed))}</span>
         {viewed.raspasState === 'eightRaspas' && (
@@ -430,7 +454,7 @@ export function Table({ onBack }: Props = {}) {
       {/* Кто ходит в СЛЕДУЮЩЕЙ сдаче. Подписи на карточках относятся именно к
           ней, а не к только что записанной — на этом легко обмануться. */}
       {(viewingHistory || !isFinished) && (
-        <div className="mb-3 px-5 py-2 bg-slate-800 rounded-lg text-center text-base">
+        <div className="mb-3 px-3 sm:px-5 py-2 bg-slate-800 rounded-lg text-center text-sm sm:text-base">
           <span className="text-slate-400">
             {viewingHistory
               ? `Смотрим сдачу №${viewed.deals.length} из ${game.deals.length}: сдавал `
