@@ -110,7 +110,11 @@ export function Table({ onBack }: Props = {}) {
   const dealer = prevClockwise(roleFirstHand, seats)
 
   const settlement = settle(viewed)
-  const minBid = minBidFor(viewed.raspasState)
+  // ВАЖНО: без конвенций minBidFor берёт домашнюю лесенку 6-7-8 и на турнире
+  // требует заказ от 8, хотя там выход затруднённый — 6-7-7-7. Форма сдачи
+  // получает этот минимум и прячет семерную из списка заказов: заказать её
+  // становится нельзя (замечание Андрея 09.09.2026, накануне турнира).
+  const minBid = minBidFor(viewed.raspasState, rulesOf(viewed))
 
   const lastDeal = viewed.deals[viewed.deals.length - 1]
   const lastDelta = viewed.lastDelta ?? null

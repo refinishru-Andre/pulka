@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { calcDeal } from './calc'
 import { applyDeal } from './index'
-import { nextRaspasState, nextFirstHand, minBidFor, raspasName, raspasStateLabel } from './raspas'
+import { nextRaspasState, nextFirstHand, minBidFor, raspasCostFor, raspasName, raspasStateLabel } from './raspas'
 import { settle } from './settle'
 import { dealBreakdown } from './report'
 import { HOME_RULES, FSPR_RULES } from './conventions'
@@ -731,5 +731,31 @@ describe('Сверка с таблицей записи ФСПР', () => {
     // Дома всё по-прежнему: лесенка 6-7-8 даёт каждому распасу своё имя
     expect(raspasName(3, HOME_RULES)).toBe('восьмерной')
     expect(raspasStateLabel('eightRaspas', HOME_RULES)).toContain('Восьмерные')
+  })
+})
+
+describe('Минимальный заказ берётся из конвенций партии', () => {
+  it('на турнире выход затруднённый: 6-7-7-7, восьмерной не требуется', () => {
+    // Ошибка накануне турнира: экран брал минимум без конвенций, домашней
+    // лесенкой 6-7-8, и на третьем распасе требовал заказ от 8. Семерная
+    // пропадала из списка — заказать её было нельзя.
+    expect(minBidFor('normal', FSPR_RULES)).toBe(6)
+    expect(minBidFor('afterFirst', FSPR_RULES)).toBe(7)
+    expect(minBidFor('eightRaspas', FSPR_RULES)).toBe(7)
+  })
+
+  it('дома лесенка своя: 6-7-8', () => {
+    expect(minBidFor('normal', HOME_RULES)).toBe(6)
+    expect(minBidFor('afterFirst', HOME_RULES)).toBe(7)
+    expect(minBidFor('eightRaspas', HOME_RULES)).toBe(8)
+  })
+
+  it('цена взятки нарастает 2-4-6 и дальше стоит на 6 — у обоих', () => {
+    expect([
+      raspasCostFor('normal', FSPR_RULES),
+      raspasCostFor('afterFirst', FSPR_RULES),
+      raspasCostFor('eightRaspas', FSPR_RULES),
+    ]).toEqual([2, 4, 6])
+    expect(raspasCostFor('eightRaspas', HOME_RULES)).toBe(6)
   })
 })
