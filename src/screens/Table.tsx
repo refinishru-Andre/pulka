@@ -229,11 +229,11 @@ export function Table({ onBack }: Props = {}) {
   const explanation = explainLastDeal()
 
   return (
-    <div className="min-h-screen p-4 lg:p-8 pb-28 lg:pb-32">
+    <div className="min-h-screen p-2 sm:p-4 lg:p-8 pb-28 lg:pb-32">
       {/* Заголовок */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-3xl font-bold">Людочка</h1>
+          <h1 className="text-xl sm:text-3xl font-bold">Людочка</h1>
           <div className="text-base text-slate-400 flex items-center gap-3 flex-wrap mt-1">
             <span>{game.poolLimit === null ? 'Пуля без предела' : `Пуля до ${game.poolLimit}`}</span>
             <span>·</span>
@@ -279,14 +279,14 @@ export function Table({ onBack }: Props = {}) {
           <button
             onClick={onBack}
             disabled={!onBack}
-            className="px-5 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-base font-semibold"
+            className="px-3 py-2.5 sm:px-5 sm:py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-sm sm:text-base font-semibold"
           >
             ← К партиям
           </button>
           <button
             onClick={viewPrev}
             disabled={viewIndex === 1 || game.deals.length === 0}
-            className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-base font-semibold"
+            className="px-3 py-2.5 sm:px-4 sm:py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-sm sm:text-base font-semibold"
             title="Посмотреть предыдущую сдачу"
           >
             ◀ Сдача
@@ -294,7 +294,7 @@ export function Table({ onBack }: Props = {}) {
           <button
             onClick={viewNext}
             disabled={!viewingHistory || viewIndex === game.deals.length}
-            className="px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-base font-semibold"
+            className="px-3 py-2.5 sm:px-4 sm:py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-30 rounded-lg text-sm sm:text-base font-semibold"
             title="Посмотреть следующую сдачу"
           >
             Сдача ▶
@@ -302,7 +302,7 @@ export function Table({ onBack }: Props = {}) {
           <button
             onClick={viewReset}
             disabled={!viewingHistory}
-            className="px-4 py-3 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-30 disabled:bg-slate-700 rounded-lg text-base font-semibold"
+            className="px-3 py-2.5 sm:px-4 sm:py-3 bg-yellow-600 hover:bg-yellow-500 disabled:opacity-30 disabled:bg-slate-700 rounded-lg text-sm sm:text-base font-semibold"
             title="Вернуться к текущему моменту"
           >
             ⤓ К текущей
@@ -313,7 +313,7 @@ export function Table({ onBack }: Props = {}) {
               setDealFormOpen(true)
             }}
             disabled={editableIndex === null}
-            className="px-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 disabled:bg-slate-700 rounded-lg text-base font-semibold"
+            className="px-3 py-2.5 sm:px-4 sm:py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 disabled:bg-slate-700 rounded-lg text-sm sm:text-base font-semibold"
             title="Исправить эту сдачу — партия пересчитается с неё"
           >
             ✏️ Исправить сдачу
@@ -329,7 +329,7 @@ export function Table({ onBack }: Props = {}) {
               }
             }}
             disabled={editableIndex === null}
-            className={`px-4 py-3 min-w-[190px] rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
+            className={`px-3 py-2.5 sm:px-4 sm:py-3 sm:min-w-[190px] rounded-lg text-sm sm:text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
               confirmDeleteDeal ? 'bg-red-600 hover:bg-red-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
             }`}
             title="Убрать эту сдачу из партии"
@@ -347,7 +347,7 @@ export function Table({ onBack }: Props = {}) {
               }
             }}
             disabled={isFinished || viewingHistory}
-            className={`px-5 py-3 min-w-[230px] rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
+            className={`px-3 py-2.5 sm:px-5 sm:py-3 sm:min-w-[230px] rounded-lg text-sm sm:text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
               confirmFinish ? 'bg-amber-600 hover:bg-amber-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
             }`}
             title="Зафиксировать итог на текущий момент. Пуля закрыта или нет — неважно: считаем по последней сдаче. После расчёта партия не меняется."
@@ -367,7 +367,7 @@ export function Table({ onBack }: Props = {}) {
               }
             }}
             disabled={isFinished}
-            className={`px-5 py-3 min-w-[260px] rounded-lg text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
+            className={`px-3 py-2.5 sm:px-5 sm:py-3 sm:min-w-[260px] rounded-lg text-sm sm:text-base font-semibold disabled:opacity-30 disabled:bg-slate-700 ${
               confirmReset ? 'bg-red-600 hover:bg-red-500 font-bold' : 'bg-slate-700 hover:bg-slate-600'
             }`}
             title={
@@ -443,7 +443,7 @@ export function Table({ onBack }: Props = {}) {
       )}
 
       {/* Основной блок: по колонке на каждого за столом */}
-      <div className={`grid ${seats.length === 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'} gap-5 mb-5`}>
+      <div className={`grid ${seats.length === 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-3'} gap-2 sm:gap-5 mb-5`}>
         {seats.map((p) => {
           const limit = viewed.poolLimit
           const closed = limit !== null && viewed.pool[p] >= limit
@@ -478,7 +478,7 @@ export function Table({ onBack }: Props = {}) {
                 {roleLabel}
               </div>
               <div className="flex items-baseline justify-between gap-2 mb-4">
-                <div className="text-2xl font-bold truncate">{game.players[p]}</div>
+                <div className="text-base sm:text-2xl font-bold truncate">{game.players[p]}</div>
                 <span
                   className={`text-4xl font-extrabold tabular-nums ${
                     settlement.net[p] > 0
@@ -495,8 +495,8 @@ export function Table({ onBack }: Props = {}) {
 
               <div className="space-y-2 mb-4">
                 <div className="flex justify-between items-baseline">
-                  <span className="text-base text-slate-400">Пуля</span>
-                  <span className="text-3xl font-bold text-pool">
+                  <span className="text-sm sm:text-base text-slate-400">Пуля</span>
+                  <span className="text-xl sm:text-3xl font-bold text-pool">
                     {viewed.pool[p]}
                     <span className="text-base text-slate-500 ml-1">/ {viewed.poolLimit}</span>
                     <Delta value={poolD} />
@@ -511,8 +511,8 @@ export function Table({ onBack }: Props = {}) {
               </div>
 
               <div className="flex justify-between items-baseline mb-3">
-                <span className="text-base text-slate-400">Гора</span>
-                <span className="text-2xl font-bold text-mount">
+                <span className="text-sm sm:text-base text-slate-400">Гора</span>
+                <span className="text-xl sm:text-2xl font-bold text-mount">
                   {viewed.mount[p]}
                   <Delta value={mountD} />
                 </span>
@@ -521,7 +521,7 @@ export function Table({ onBack }: Props = {}) {
               <div className="border-t border-slate-700 mt-4 pt-3">
                 <div className="text-sm text-slate-500 mb-2">Висты на кого написал</div>
                 {seats.filter((o) => o !== p).map((o) => (
-                  <div key={o} className="flex justify-between items-baseline text-lg mb-1">
+                  <div key={o} className="flex justify-between items-baseline text-sm sm:text-lg mb-1">
                     <span className="text-slate-400">→ {game.players[o]}</span>
                     <span className="text-whist font-semibold">
                       {viewed.whists[p][o]}
@@ -600,11 +600,11 @@ export function Table({ onBack }: Props = {}) {
       {/* Sticky-футер */}
       <div className="fixed bottom-0 left-0 right-0 p-3 lg:p-4 bg-slate-900/95 backdrop-blur border-t border-slate-800 z-40">
         {isFinished ? (
-          <div className="w-full py-5 bg-slate-800 rounded-2xl text-xl font-bold text-center text-slate-400">
+          <div className="w-full py-3 sm:py-5 bg-slate-800 rounded-2xl text-base sm:text-xl font-bold text-center text-slate-400">
             🏁 Партия завершена — только просмотр
           </div>
         ) : viewingHistory ? (
-          <div className="w-full py-5 bg-slate-800 rounded-2xl text-xl font-bold text-center text-yellow-400">
+          <div className="w-full py-3 sm:py-5 bg-slate-800 rounded-2xl text-base sm:text-xl font-bold text-center text-yellow-400">
             👁 Просмотр истории — вернись к текущей чтобы записать сдачу
           </div>
         ) : (
@@ -613,7 +613,7 @@ export function Table({ onBack }: Props = {}) {
               setEditIndex(null)
               setDealFormOpen(true)
             }}
-            className="w-full py-5 bg-green-600 hover:bg-green-500 rounded-2xl text-2xl font-bold shadow-lg"
+            className="w-full py-3 sm:py-5 bg-green-600 hover:bg-green-500 rounded-2xl text-lg sm:text-2xl font-bold shadow-lg"
           >
             + Записать сдачу
           </button>

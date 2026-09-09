@@ -214,7 +214,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-2 sm:p-4">
       <div className="bg-slate-800 rounded-2xl max-w-4xl w-full flex flex-col" style={{ maxHeight: '95vh' }}>
         {/* HEADER (не скроллится) */}
-        <div className="px-5 pt-4 pb-3 border-b border-slate-700">
+        <div className="px-3 sm:px-5 pt-4 pb-3 border-b border-slate-700">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-xl font-bold">
               {edit ? `Правка сдачи №${edit.index + 1}` : 'Записать сдачу'}
@@ -436,7 +436,7 @@ function GameFormFields(props: {
               ? `· сыграл${gamePlayerTricks > gameLevel ? ` +${gamePlayerTricks - gameLevel}` : ''}`
               : `· недобор ${gameLevel - gamePlayerTricks}`}
           </div>
-          <div className="grid grid-cols-11 gap-1">
+          <div className="grid grid-cols-6 sm:grid-cols-11 gap-1">
             {Array.from({ length: 11 }, (_, i) => (
               <button
                 key={i}
@@ -586,7 +586,7 @@ function GameFormFields(props: {
                         [v]: Math.max(0, gameVisterTricks[v] - 1),
                       })
                     }
-                    className="w-9 h-9 rounded-lg bg-slate-700 text-lg font-bold"
+                    className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 text-lg font-bold"
                   >
                     −
                   </button>
@@ -598,7 +598,7 @@ function GameFormFields(props: {
                         [v]: Math.min(need, gameVisterTricks[v] + 1),
                       })
                     }
-                    className="w-9 h-9 rounded-lg bg-slate-700 text-lg font-bold"
+                    className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 text-lg font-bold"
                   >
                     +
                   </button>
@@ -651,7 +651,7 @@ function MisereFormFields(props: {
             ? `сыграл (${rules.miserePoolCost} в пулю)`
             : `поймали (${misTricks * rules.misereTrickPenalty} в гору)`}
         </div>
-        <div className="grid grid-cols-11 gap-1">
+        <div className="grid grid-cols-6 sm:grid-cols-11 gap-1">
           {Array.from({ length: 11 }, (_, i) => (
             <button
               key={i}
@@ -708,14 +708,14 @@ function RaspasFormFields(props: {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setTricks({ ...tricks, [p]: Math.max(0, tricks[p] - 1) })}
-                  className="w-9 h-9 rounded-lg bg-slate-700 text-lg font-bold"
+                  className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 text-lg font-bold"
                 >
                   −
                 </button>
                 <div className="text-xl font-bold flex-1 text-center">{tricks[p]}</div>
                 <button
                   onClick={() => setTricks({ ...tricks, [p]: Math.min(10, tricks[p] + 1) })}
-                  className="w-9 h-9 rounded-lg bg-slate-700 text-lg font-bold"
+                  className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 text-lg font-bold"
                 >
                   +
                 </button>

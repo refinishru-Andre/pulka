@@ -29,7 +29,9 @@ export default defineConfig({
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
-        orientation: 'landscape',
+        // 'landscape' навязывал бы поворот на телефоне, где играют вертикально.
+        // На планшете и так альбомная — там ориентацию выбирает человек.
+        orientation: 'any',
         start_url: '/',
         icons: [
           {
