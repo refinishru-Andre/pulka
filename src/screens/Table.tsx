@@ -162,7 +162,10 @@ export function Table({ onBack }: Props = {}) {
     if (!lastDeal || !lastDelta) return []
     const lines: string[] = []
     if (handBeforeLastDeal) {
-      lines.push(`Сдача ${viewed.deals.length}. Первая рука была: ${game.players[handBeforeLastDeal]}.`)
+      const dealerThen = prevClockwise(handBeforeLastDeal, seats)
+      lines.push(
+        `Сдача ${viewed.deals.length}. Сдавал ${game.players[dealerThen]} · первая рука ${game.players[handBeforeLastDeal]}.`,
+      )
     }
     if (lastDeal.type === 'game' && lastDeal.contract.kind === 'game') {
       const player = game.players[lastDeal.player]
@@ -217,11 +220,7 @@ export function Table({ onBack }: Props = {}) {
     seats.forEach((p) => {
       const changes: string[] = []
       if (lastDelta.pool[p] !== 0) changes.push(`пуля ${lastDelta.pool[p] > 0 ? '+' : ''}${lastDelta.pool[p]}`)
-      // «гора −12» читалось как «гора равна минус двенадцати», хотя это
-      // СПИСАНИЕ с горы. Отрицательной горы в преферансе не бывает, поэтому
-      // минус проговариваем словами (замечание Андрея 09.09.2026).
-      if (lastDelta.mount[p] > 0) changes.push(`гора +${lastDelta.mount[p]}`)
-      else if (lastDelta.mount[p] < 0) changes.push(`с горы списано ${-lastDelta.mount[p]}`)
+      if (lastDelta.mount[p] !== 0) changes.push(`гора ${lastDelta.mount[p] > 0 ? '+' : ''}${lastDelta.mount[p]}`)
       const whistsOut = seats.filter((o) => o !== p)
         .map((o) => (lastWhistDelta[p][o] !== 0 ? `+${lastWhistDelta[p][o]} на ${game.players[o]}` : null))
         .filter(Boolean)

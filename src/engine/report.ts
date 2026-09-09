@@ -85,6 +85,7 @@ export function dealBreakdown(
             ? `Амнистия минимума: у всех вычитается ${min} — столько взял тот, кто взял меньше всех.`
             : 'Амнистия минимума на этой сдаче ничего не меняет — кто-то взял ноль.'),
     )
+    const mark = (p: PlayerId) => (p === deal.dealer ? `${who(p)} (сдавал)` : who(p))
     played.forEach((p) => {
       const mine = deal.tricks[p] ?? 0
       const billed = rules.raspasWriteEveryTrick ? mine : mine - min
@@ -94,23 +95,23 @@ export function dealBreakdown(
       if (mine === 0) {
         if (rules.raspasZeroExcludesDealer && p === deal.dealer) {
           lines.push(
-            `${who(p)}: взял 0, но он сдающий — поблажка за чистый распас не полагается, в гору 0.`,
+            `${mark(p)}: взял 0, но поблажка за чистый распас сдающему не полагается — в гору 0.`,
           )
         } else if (rules.raspasZeroBonus === 'mountMinus2') {
           lines.push(
-            `${who(p)}: взял 0 — чистый распас, с горы списываем цену 2 взяток: ${2 * cost}.`,
+            `${mark(p)}: взял 0 — чистый распас, с горы списываем цену 2 взяток: ${2 * cost}.`,
           )
         } else if (rules.raspasZeroBonus === 'poolPlus1') {
-          lines.push(`${who(p)}: взял 0 — чистый распас, пишем цену взятки в пулю: +${cost}.`)
+          lines.push(`${mark(p)}: взял 0 — чистый распас, пишем цену взятки в пулю: +${cost}.`)
         } else {
-          lines.push(`${who(p)}: взял 0 — в гору 0.`)
+          lines.push(`${mark(p)}: взял 0 — в гору 0.`)
         }
         return
       }
       const tail = rules.raspasWriteEveryTrick
         ? `${mine} × ${cost} = ${billed * cost}`
         : `(${mine} − ${min}) × ${cost} = ${billed * cost}`
-      lines.push(`${who(p)}: взял ${mine} — в гору ${billed * cost}${billed > 0 ? ` (${tail})` : ''}.`)
+      lines.push(`${mark(p)}: взял ${mine} — в гору ${billed * cost}${billed > 0 ? ` (${tail})` : ''}.`)
     })
     return lines
   }
