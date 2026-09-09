@@ -6,7 +6,7 @@
 
 import type { GameState, PlayerId, Deal, Seats } from './types'
 import { seatsOf } from './types'
-import { rulesOf, halfVistTricks, type Rules } from './conventions'
+import { rulesOf, halfVistTricks, ladderAt, type Rules } from './conventions'
 import { settle } from './settle'
 
 function dateLabel(ms: number): string {
@@ -66,6 +66,50 @@ export function dealBreakdown(
 ): string[] {
   const who = (p: PlayerId) => players[p] || p
   const lines: string[] = []
+
+  // РАСПАС. Разбираем по каждому игроку поимённо, включая взявших ноль.
+  // Раньше объяснения не было вовсе, и в записи оставались только те, у кого
+  // гора изменилась. Человек с нулём просто исчезал, и было непонятно: то ли
+  // ему списали по амнистии, то ли забыли (замечание Андрея 09.09.2026).
+  if (deal.type === 'raspas') {
+    const cost = ladderAt(rules.raspasCostLadder, deal.level - 1)
+    const played = seats.filter(
+      (p) => deal.tricks[p] !== undefined || !(seats.length === 4 && p === deal.dealer),
+    )
+    const min = Math.min(...played.map((p) => deal.tricks[p] ?? 0))
+    lines.push(
+      `Взятка на этом распасе ${cost} в гору. ` +
+        (rules.raspasWriteEveryTrick
+          ? 'Пишем каждому за КАЖДУЮ его взятку.'
+          : min > 0
+            ? `Амнистия минимума: у всех вычитается ${min} — столько взял тот, кто взял меньше всех.`
+            : 'Амнистия минимума на этой сдаче ничего не меняет — кто-то взял ноль.'),
+    )
+    played.forEach((p) => {
+      const mine = deal.tricks[p] ?? 0
+      const billed = rules.raspasWriteEveryTrick ? mine : mine - min
+      const tail = rules.raspasWriteEveryTrick
+        ? `${mine} × ${cost} = ${billed * cost}`
+        : `(${mine} − ${min}) × ${cost} = ${billed * cost}`
+      lines.push(`${who(p)}: взял ${mine} — в гору ${billed * cost}${billed > 0 ? ` (${tail})` : ''}.`)
+    })
+    // Поблажка за ноль взяток — и почему её может не быть
+    played
+      .filter((p) => (deal.tricks[p] ?? 0) === 0)
+      .forEach((p) => {
+        if (rules.raspasZeroExcludesDealer && p === deal.dealer) {
+          lines.push(
+            `${who(p)} взял 0, но он сдающий — поблажка за чистый распас ему не полагается.`,
+          )
+        } else if (rules.raspasZeroBonus === 'mountMinus2') {
+          lines.push(`${who(p)} взял 0 — списываем цену 2 взяток: ${-2 * cost} в гору.`)
+        } else if (rules.raspasZeroBonus === 'poolPlus1') {
+          lines.push(`${who(p)} взял 0 — пишем цену взятки в пулю: +${cost}.`)
+        }
+      })
+    return lines
+  }
+
   if (deal.type !== 'game' || deal.contract.kind !== 'game') return lines
 
   const level = deal.contract.level
