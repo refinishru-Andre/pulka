@@ -7,11 +7,25 @@ import { GamesList } from './screens/GamesList'
 import { Stats } from './screens/Stats'
 import { Calculator } from './screens/Calculator'
 import { supabase } from './supabase/client'
+import { useOnline } from './store/online'
 import type { User } from '@supabase/supabase-js'
 
 type Screen = 'games' | 'newGame' | 'table' | 'stats' | 'calc'
 
+// Тонкая полоса поверх всего, пока у планшета нет сети.
+// Коротко и по делу: писать можно, но эту партию нельзя открывать на другом
+// устройстве — иначе две копии разойдутся и одна затрёт другую.
+function OfflineBar() {
+  return (
+    <div className="sticky top-0 z-50 bg-amber-500 text-slate-900 text-center text-sm font-semibold px-3 py-1.5">
+      ▲ Нет связи · записывать можно, всё сохраняется здесь · не открывай эту партию на другом
+      устройстве
+    </div>
+  )
+}
+
 export default function App() {
+  const online = useOnline()
   const game = useGameStore((s) => s.game)
   const gameId = useGameStore((s) => s.gameId)
   const recalculate = useGameStore((s) => s.recalculate)
@@ -56,7 +70,14 @@ export default function App() {
 
   // Не залогинен и не пропустил → показать Login
   if (!user && !skipAuth) {
-    return <Login onSkip={() => setSkipAuth(true)} />
+    // На экране входа полоса особенно нужна: без сети вход не пройдёт в
+    // принципе, и человек будет думать, что забыл кодовое слово.
+    return (
+      <>
+        {!online && <OfflineBar />}
+        <Login onSkip={() => setSkipAuth(true)} />
+      </>
+    )
   }
 
   // Залогинен: показываем список партий или редактор
@@ -82,6 +103,7 @@ export default function App() {
     }
     return (
       <>
+        {!online && <OfflineBar />}
         {content}
         {importNotice && (
           <div
@@ -96,5 +118,10 @@ export default function App() {
   }
 
   // Гость (без аккаунта) — старая логика с одной игрой в LocalStorage
-  return <div className="min-h-screen">{game ? <Table /> : <NewGame />}</div>
+  return (
+    <div className="min-h-screen">
+      {!online && <OfflineBar />}
+      {game ? <Table /> : <NewGame />}
+    </div>
+  )
 }

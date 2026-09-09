@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useGameStore } from '../store/game'
 import { useSyncStatus } from '../store/sync-status'
+import { useOnline } from '../store/online'
 import {
   settle,
   minBidFor,
@@ -58,6 +59,7 @@ export function Table({ onBack }: Props = {}) {
   const resetGame = useGameStore((s) => s.resetGame)
   const finishGame = useGameStore((s) => s.finishGame)
   const syncState = useSyncStatus((s) => s.state)
+  const isOnline = useOnline()
   const [dealFormOpen, setDealFormOpen] = useState(false)
   // Правка сдачи из истории: её номер. null — обычная запись новой сдачи.
   const [editIndex, setEditIndex] = useState<number | null>(null)
@@ -382,7 +384,10 @@ export function Table({ onBack }: Props = {}) {
       {/* Связь с облаком потеряна. Данные не пропали — они в памяти этого
           устройства, и приложение само повторяет отправку. Опасно только
           закрыть вкладку и уйти играть на другом устройстве. */}
-      {syncState === 'failed' && (
+      {/* Сеть есть, а записать не выходит — сервер недоступен. Случай отдельный
+          от «нет сети»: про него говорит полоса наверху, и дублировать её здесь
+          красным блоком незачем. */}
+      {syncState === 'failed' && isOnline && (
         <div className="mb-5 px-5 py-4 bg-red-500/15 border border-red-500/50 rounded-lg">
           <div className="font-bold text-red-300 text-lg">▲ Сдачи не уходят в облако</div>
           <div className="text-base text-red-100/80 mt-1">
