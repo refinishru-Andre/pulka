@@ -105,23 +105,21 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
   const { canSubmit, buildDeal, blockedBy } = useMemo(() => {
     if (dealType === 'game') {
       const visters = vistersFor(seats, dealer, gamePlayer, dealerVists)
-      // Полвиста — фиксированная плата, человек выбывает из розыгрыша.
-      // Взятки распределяются только между остальными защитниками.
-      const half = visters.filter(
-        (v) => gameVistDecisions[v] === 'half' && rules.halfVistLevels.includes(gameLevel),
+      const layout = vistTricksLayout(
+        visters,
+        gameVistDecisions,
+        rules,
+        gameLevel,
+        gamePlayerTricks,
+        gameVisterTricks,
       )
-      const rest = visters.filter((v) => !half.includes(v))
-      // Играть некому — игра автоматом, без розыгрыша
-      const isAuto = rest.every((v) => gameVistDecisions[v] === 'pass')
-      const vTotal = rest.reduce((sum, v) => sum + gameVisterTricks[v], 0)
-      const need = 10 - gamePlayerTricks
-      const ok = isAuto || vTotal === need
+      const { isAuto, ok, enteredTotal, need } = layout
       const contract: Contract = { kind: 'game', level: gameLevel }
       return {
         canSubmit: ok,
         blockedBy: ok
           ? null
-          : `Распределите взятки вистующих: ${vTotal} из ${need}`,
+          : `Распределите взятки вистующих: ${enteredTotal} из ${need}`,
         buildDeal: (): Deal => ({
           type: 'game',
           dealer,
@@ -132,7 +130,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
           playerTricks: isAuto ? gameLevel : gamePlayerTricks,
           // Пишем только участников сдачи, а не все четыре места
           // У полвистового взяток нет — он не играл
-          vistersTricks: pickBy(rest, (v) => (isAuto ? 0 : gameVisterTricks[v])),
+          vistersTricks: layout.tricks,
           vistDecisions: pickBy(visters, (v) => gameVistDecisions[v]),
           ...(rules.prikupBonus && prikupFast > 0 ? { prikupFastTricks: prikupFast } : {}),
         }),
@@ -382,17 +380,22 @@ function GameFormFields(props: {
   const canPlay = seats.filter((p) => !fourHanded || p !== dealer)
   const visters = vistersFor(seats, dealer, gamePlayer, dealerVists)
   const availableLevels = GAME_LEVELS.filter((l) => l >= minBid)
-  // Полвиста — фиксированная плата, человек выбывает из розыгрыша: его взятки
-  // не спрашиваем вовсе. Остальные делят между собой всё, что не взял играющий.
-  const halfPlayers = visters.filter(
-    (v) => gameVistDecisions[v] === 'half' && rules.halfVistLevels.includes(gameLevel),
+  const {
+    half: halfPlayers,
+    active: playingVisters,
+    isAuto,
+    sole: soleVister,
+    need,
+    enteredTotal: entered,
+    ok: tricksOk,
+  } = vistTricksLayout(
+    visters,
+    gameVistDecisions,
+    rules,
+    gameLevel,
+    gamePlayerTricks,
+    gameVisterTricks,
   )
-  const playingVisters = visters.filter((v) => !halfPlayers.includes(v))
-  const need = 10 - gamePlayerTricks
-  const entered = playingVisters.reduce((s, v) => s + gameVisterTricks[v], 0)
-  const tricksOk = entered === need
-  // Играть некому — игра автоматом, без розыгрыша
-  const isAuto = playingVisters.every((v) => gameVistDecisions[v] === 'pass')
   const allPassAuto = visters.every((v) => gameVistDecisions[v] === 'pass')
 
   return (
@@ -585,8 +588,19 @@ function GameFormFields(props: {
         </div>
       )}
 
+      {/* Вистующий один — его взятки очевидны, руками не вводятся */}
+      {!isAuto && soleVister && (
+        <div className="px-3 py-2 bg-slate-900 rounded-lg text-sm text-slate-300">
+          Вистует один — {game.players[soleVister]} берёт{' '}
+          <span className="font-semibold text-slate-100">
+            {need} {tricksWord(need)}
+          </span>
+          {need > 0 && ', всё что не взял играющий'}.
+        </div>
+      )}
+
       {/* Взятки вистующих */}
-      {!isAuto && need > 0 && (
+      {!isAuto && !soleVister && need > 0 && (
         <div>
           <div className={`text-xs mb-1 ${tricksOk ? 'text-slate-400' : 'text-red-400'}`}>
             Взятки вистующих — распределить {need} ({entered}/{need})
@@ -887,11 +901,62 @@ function vistersFor(
   })
 }
 
+// Как делятся взятки вистующих между защитниками.
+//
+// Ушедший за полвиста выбывает из розыгрыша — его взятки не спрашиваем вовсе.
+// Пасовавший карты играет, но за взятки не отвечает: взятки пишутся вистующим.
+// Поэтому если вистующий остался ОДИН, всё, что не взял играющий, записывается
+// ему — сколько бы фактически ни взял пасовавший. Цифра однозначна, спрашивать
+// нечего. Делить руками есть смысл только когда вистующих двое и больше.
+// (решение Андрея, 2026-09-09)
+function vistTricksLayout(
+  visters: PlayerId[],
+  decisions: Record<PlayerId, VistDecision>,
+  rules: Rules,
+  level: GameLevel,
+  playerTricks: number,
+  entered: Record<PlayerId, number>,
+) {
+  const half = visters.filter((v) => decisions[v] === 'half' && rules.halfVistLevels.includes(level))
+  const rest = visters.filter((v) => !half.includes(v))
+  const active = rest.filter((v) => decisions[v] === 'vist')
+  // Играть некому — игра автоматом, без розыгрыша
+  const isAuto = active.length === 0
+  const need = 10 - playerTricks
+  // Вистующий один — его взятки очевидны, руками не вводятся
+  const sole = !isAuto && active.length === 1 ? active[0] : null
+  const enteredTotal = active.reduce((sum, v) => sum + entered[v], 0)
+  const tricks = pickBy(rest, (v) => {
+    if (isAuto) return 0
+    if (sole) return v === sole ? need : 0
+    return active.includes(v) ? entered[v] : 0
+  })
+  return {
+    half,
+    rest,
+    active,
+    isAuto,
+    sole,
+    need,
+    enteredTotal,
+    tricks,
+    ok: isAuto || sole !== null || enteredTotal === need,
+  }
+}
+
 // Кто пишет взятки на распасе. Вчетвером сдающий участвует: он открывает прикуп
 // по карте и делает первые два хода.
 function raspasPlayers(seats: PlayerId[], dealer: PlayerId, dealerPlays: boolean): PlayerId[] {
   if (seats.length < 4 || dealerPlays) return seats
   return seats.filter((p) => p !== dealer)
+}
+
+// «берёт 1 взятку», «2 взятки», «5 взяток»
+function tricksWord(n: number): string {
+  if (n % 100 >= 11 && n % 100 <= 14) return 'взяток'
+  if (n % 10 === 1) return 'взятку'
+  if (n % 10 >= 2 && n % 10 <= 4) return 'взятки'
+  return 'взяток'
 }
 
 // Собрать запись только по участникам сдачи, без пустых мест
