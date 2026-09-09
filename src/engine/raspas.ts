@@ -224,7 +224,9 @@ export function raspasName(level: 1 | 2 | 3, rules: Rules): string {
   if (ladderNamesDistinct(rules)) {
     return BID_ADJ[ladderAt(rules.minBidLadder, level - 1)] ?? `${level}-й`
   }
-  return level >= 3 ? '3-й и дальше' : `${level}-й`
+  // Сыгранная сдача была вполне определённой: третьей. «И дальше» уместно
+  // только в подписи состояния стола (раньше оно попадало и в запись сдачи).
+  return `${level}-й`
 }
 
 // Подпись текущего состояния для экрана. Говорит две вещи: от чего заказывать

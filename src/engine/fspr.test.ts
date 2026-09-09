@@ -725,7 +725,7 @@ describe('Сверка с таблицей записи ФСПР', () => {
     // Выход затруднённый 7-7-7: «восьмерных распасов» в турнире не бывает,
     // заказ так и стоит на семи — растёт только цена взятки.
     expect(raspasName(1, FSPR_RULES)).toBe('1-й')
-    expect(raspasName(3, FSPR_RULES)).toBe('3-й и дальше')
+    expect(raspasName(3, FSPR_RULES)).toBe('3-й')
     expect(raspasStateLabel('eightRaspas', FSPR_RULES)).not.toContain('Восьмерные')
     expect(raspasStateLabel('eightRaspas', FSPR_RULES)).toContain('заказ от 7')
     // Дома всё по-прежнему: лесенка 6-7-8 даёт каждому распасу своё имя
