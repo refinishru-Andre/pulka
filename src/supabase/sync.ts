@@ -4,7 +4,7 @@
 
 import { supabase } from './client'
 import type { GameState, Deal, Seats } from '../engine/types'
-import { recomputeState, type Rules } from '../engine'
+import { recomputeState, isGameFinished, type Rules } from '../engine'
 
 interface CloudGame {
   id: string
@@ -132,7 +132,13 @@ export async function uploadGame(
 
 export interface GamesFetch {
   ok: boolean // false = не смогли достучаться до облака (нет связи / не залогинен)
-  items: { id: string; game: GameState; finished: boolean; finishedAt: string | null }[]
+  items: {
+    id: string
+    game: GameState
+    finished: boolean
+    finishedAt: string | null
+    cloudFinished: boolean // как записано в колонке облака — для самопочинки в loadGame
+  }[]
 }
 
 // Загрузить все игры пользователя из облака.
@@ -157,7 +163,11 @@ export async function fetchGamesResult(): Promise<GamesFetch> {
     // Вмороженные партии recomputeState пропускает — с ростом числа партий
     // это единственное, что не даёт списку тормозить на переигрывании истории.
     const game = recomputeState(raw)
-    return { id: c.id, game, finished: c.finished, finishedAt: c.finished_at }
+    // Признак «окончена» берём не только из колонки, но и из самих сдач — так же,
+    // как стол. Колонка бывает отстающей: пули закрыты, а в облаке finished = false.
+    // Тогда список писал «В процессе», а стол — «Партия окончена».
+    const finished = c.finished || game.finishedManually === true || isGameFinished(game)
+    return { id: c.id, game, finished, finishedAt: c.finished_at, cloudFinished: c.finished }
   })
   return { ok: true, items }
 }

@@ -106,7 +106,8 @@ interface Store {
     seats?: Seats // трое или четверо; по умолчанию трое
     rules?: Rules // конвенции партии; по умолчанию «Дом»
   }) => void
-  loadGame: (id: string, game: GameState) => void
+  // cloudFinished — значение колонки finished в облаке (если партия открыта из списка)
+  loadGame: (id: string, game: GameState, cloudFinished?: boolean) => void
   addDeal: (deal: Deal) => void
   viewPrev: () => void // просмотр: назад
   viewNext: () => void // просмотр: вперёд
@@ -160,7 +161,7 @@ export const useGameStore = create<Store>()(
         set({ game, gameId: id, redoStack: [], viewIndex: null })
         scheduleSync(id, game)
       },
-      loadGame: (id, game) => {
+      loadGame: (id, game, cloudFinished) => {
         const cur = get()
         // Защита от отката. Облачная копия бывает БЕДНЕЕ локальной: связь оборвалась
         // на 5-й сдаче, а доиграли до 10-й. Открытие такой партии из списка раньше
@@ -181,6 +182,16 @@ export const useGameStore = create<Store>()(
         // Загруженный из облака state мог быть с багами — deals[] это единственный источник истины.
         if (game.deals.length > 0) {
           const recalculated = recomputeState(game)
+          // Пули закрыты, а в облаке партия всё ещё «не завершена» — значит, последняя
+          // запись туда не дошла с признаком finished. Дописываем один раз: пока в
+          // облаке finished = false, БД это разрешает. Без этого партия навсегда
+          // висела в списке «В процессе».
+          if (isGameFinished(recalculated) && cloudFinished === false) {
+            const frozen = freezeGame(recalculated, Date.now())
+            set({ game: frozen, gameId: id, redoStack: [], viewIndex: null })
+            scheduleSync(id, frozen)
+            return
+          }
           set({ game: recalculated, gameId: id, redoStack: [], viewIndex: null })
           // Пересчитанный кеш возвращаем в облако — формулы движка могли измениться.
           // Завершённую партию БД менять не даёт, её просто помечаем как сохранённую.

@@ -20,6 +20,7 @@ interface CloudGameItem {
   game: GameState
   finished: boolean
   finishedAt: string | null
+  cloudFinished: boolean
 }
 
 interface Props {
@@ -135,7 +136,7 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
   }, [])
 
   const handleOpen = (item: CloudGameItem) => {
-    loadGame(item.id, item.game)
+    loadGame(item.id, item.game, item.cloudFinished)
     onOpenGame()
   }
 
