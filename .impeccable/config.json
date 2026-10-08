@@ -11,6 +11,15 @@
         ],
         "createdAt": "2026-10-08T17:27:23.182Z",
         "reason": "Claude: L278 — text-slate-900 (почти чёрный) на bg-yellow-500, контраст высокий; ложное срабатывание"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/screens/DealForm.tsx"
+        ],
+        "createdAt": "2026-10-08T17:28:34.609Z",
+        "reason": "Claude: 15× text-slate-900 на bg-yellow-500 (почти чёрный на жёлтом) и disabled-кнопка на slate-700 — ложные срабатывания"
       }
     ]
   }

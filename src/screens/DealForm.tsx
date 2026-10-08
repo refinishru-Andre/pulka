@@ -336,7 +336,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="w-full py-3 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg font-bold text-lg"
+            className="w-full py-3 bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-200 rounded-lg font-bold text-lg"
           >
             {canSubmit ? 'Записать' : (blockedBy ?? 'Заполните все поля')}
           </button>
