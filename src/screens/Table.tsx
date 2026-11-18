@@ -633,7 +633,10 @@ export function Table({ onBack }: Props = {}) {
         </div>
       )}
 
-      {dealFormOpen && !isFinished && !viewingHistory && (
+      {/* Правку открываем и при просмотре истории: раньше форма ждала возврата
+          «к текущей» и выскакивала там — казалось, что правишь не ту сдачу
+          (замечание Андрея 18.11.2026). Новая сдача — только на текущем моменте. */}
+      {dealFormOpen && !isFinished && (!viewingHistory || editIndex !== null) && (
         <DealForm
           minBid={editIndex === null ? minBid : minBidFor(replayTo(game, editIndex).raspasState, rulesOf(game))}
           raspasState={editIndex === null ? game.raspasState : replayTo(game, editIndex).raspasState}
