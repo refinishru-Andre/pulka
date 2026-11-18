@@ -236,6 +236,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
             <div className="text-xs text-slate-400 order-last sm:order-none w-full sm:w-auto">
               Первая рука: <span className="font-semibold text-yellow-500">{game.players[game.firstHand]}</span>
               <span className="ml-3">Мин: <span className="font-semibold text-slate-200">{minBid}</span></span>
+              <span className="ml-3 text-slate-600">версия {__BUILD_STAMP__}</span>
             </div>
             <button
               onClick={onClose}

@@ -2,8 +2,15 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Метка сборки — видна в форме сдачи, чтобы сразу понять, свежая ли версия
+// открыта на устройстве (18.11.2026: телефон держал старый код весь вечер).
+const BUILD_STAMP = new Date().toLocaleString('ru-RU', {
+  timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+})
+
 export default defineConfig({
   base: '/pulka/',
+  define: { __BUILD_STAMP__: JSON.stringify(BUILD_STAMP) },
   plugins: [
     react(),
     VitePWA({
