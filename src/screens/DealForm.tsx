@@ -397,6 +397,19 @@ function GameFormFields(props: {
     gameVisterTricks,
   )
   const allPassAuto = visters.every((v) => gameVistDecisions[v] === 'pass')
+  // Вистуют двое — взятки второго однозначны: всё, что не взял играющий и
+  // первый вистующий. Меняешь цифру одному — второму досчитывается остаток
+  // (просьба Андрея 18.11.2026). Втроём (вчетвером вистует и сдающий)
+  // остаток не однозначен — там каждому руками.
+  const setVisterTricks = (v: PlayerId, n: number) => {
+    const value = Math.min(need, Math.max(0, n))
+    const next = { ...gameVisterTricks, [v]: value }
+    if (playingVisters.length === 2) {
+      const other = playingVisters.find((x) => x !== v)!
+      next[other] = need - value
+    }
+    setGameVisterTricks(next)
+  }
 
   return (
     <div className="space-y-3">
@@ -619,24 +632,14 @@ function GameFormFields(props: {
                 <div className="text-xs mb-1">{game.players[v]}</div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() =>
-                      setGameVisterTricks({
-                        ...gameVisterTricks,
-                        [v]: Math.max(0, gameVisterTricks[v] - 1),
-                      })
-                    }
+                    onClick={() => setVisterTricks(v, gameVisterTricks[v] - 1)}
                     className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 text-lg font-bold"
                   >
                     −
                   </button>
                   <div className="text-xl font-bold flex-1 text-center">{gameVisterTricks[v]}</div>
                   <button
-                    onClick={() =>
-                      setGameVisterTricks({
-                        ...gameVisterTricks,
-                        [v]: Math.min(need, gameVisterTricks[v] + 1),
-                      })
-                    }
+                    onClick={() => setVisterTricks(v, gameVisterTricks[v] + 1)}
                     className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg bg-slate-700 text-lg font-bold"
                   >
                     +
