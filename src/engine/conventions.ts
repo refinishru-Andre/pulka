@@ -185,7 +185,7 @@ export const FSPR_RULES: Rules = {
   consolation: true,
   consolationToDealer: true, // сдатчик получает за подсад
   halfVistLevels: [6, 7], // 6.6
-  dealerMayVist: true, // «пас — полвиста — пас» (6.6)
+  dealerMayVist: true, // вступает, только когда оба вистующих спасовали
 
   raspasCostLadder: [2, 4, 6], // 2-4-6-6-6 (6.5)
   minBidLadder: [6, 7], // выход затруднённый 7-7-7-7 (6.5)

@@ -58,7 +58,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
   const [gamePlayer, setGamePlayer] = useState<PlayerId>(
     oldGame?.player ?? oldMisere?.player ?? firstHand,
   )
-  // Вчетвером сдающий может вступить вистующим при торговле «пас — полвиста — пас»
+  // Вчетвером сдающий вступает вистующим, только когда оба вистующих спасовали
   const [dealerVists, setDealerVists] = useState(
     oldGame ? oldGame.vistDecisions[prevClockwise(firstHand, seats)] !== undefined : false,
   )
@@ -402,9 +402,11 @@ function GameFormFields(props: {
   // и считались неверно (замечание Андрея 18.11.2026). Поэтому: выбрал
   // «Полвиста» — партнёру «Пас»; выбрал «Вист» при чужом «Полвиста» — тот
   // сбрасывается на «Пас» (пасовавший «поднял», обычный вист).
-  // Сдающего вчетвером не трогаем — он вступает отдельной кнопкой.
+  // Вчетвером сдающий вступает только при «пас — пас»: кто-то из двоих
+  // вистует или уходит за полвиста — сдающий выключается.
   const applyVistChoice = (v: PlayerId, d: VistDecision) => {
     const next = { ...gameVistDecisions, [v]: d }
+    if (dealerVists && v !== dealer && d !== 'pass') setDealerVists(false)
     for (const other of visters) {
       if (other === v || other === dealer) continue
       if (d === 'half' && next[other] !== 'pass') next[other] = 'pass'
@@ -517,11 +519,19 @@ function GameFormFields(props: {
       )}
 
       {/* Сдающий вистует ВМЕСТО отказавшихся защитников, а не вдобавок к ним:
-          такое бывает только при торговле «пас — полвиста — пас». Слово «и» в
-          подписи было враньём (замечание Андрея 09.09.2026). */}
+          он вступает, только когда оба вистующих спасовали (уточнение Андрея
+          18.11.2026). Поэтому включил кнопку — обоим «Пас», сдающему «Вист».
+          Слово «и» в подписи было враньём (замечание Андрея 09.09.2026). */}
       {fourHanded && rules.dealerMayVist && (
         <button
-          onClick={() => setDealerVists(!dealerVists)}
+          onClick={() => {
+            if (!dealerVists) {
+              const next = { ...gameVistDecisions, [dealer]: 'vist' as VistDecision }
+              for (const v of visters) if (v !== dealer) next[v] = 'pass'
+              setGameVistDecisions(next)
+            }
+            setDealerVists(!dealerVists)
+          }}
           className={`w-full py-2 rounded-lg text-sm font-semibold ${
             dealerVists
               ? 'bg-yellow-500 text-slate-900'
@@ -578,7 +588,10 @@ function GameFormFields(props: {
               <div key={v} className="grid grid-cols-4 gap-2 items-center">
                 <div className="font-semibold text-sm">{game.players[v]}</div>
                 {(['vist', 'pass', 'half'] as VistDecision[]).map((d) => {
-                  const disabled = d === 'half' && !rules.halfVistLevels.includes(gameLevel)
+                  // Сдающий раз вступил — только вистует; передумал — выключи кнопку выше
+                  const disabled =
+                    (d === 'half' && !rules.halfVistLevels.includes(gameLevel)) ||
+                    (fourHanded && v === dealer && d !== 'vist')
                   return (
                     <button
                       key={d}
