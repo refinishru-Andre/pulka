@@ -445,6 +445,14 @@ function GameFormFields(props: {
             <button
               key={p}
               onClick={() => {
+                // Сменился играющий — сменились и вистующие. Выбор «как вистовали»
+                // начинаем заново: иначе всплывал забытый выбор прошлого
+                // вистующего, и выходило невозможное «Полвиста + Вист» (18.11.2026).
+                if (p !== gamePlayer) {
+                  const d: VistDecision = gameLevel === 10 ? 'pass' : 'vist'
+                  setGameVistDecisions({ A: d, B: d, C: d, D: d })
+                  setDealerVists(false)
+                }
                 setGamePlayer(p)
                 setGameVisterTricks({ A: 0, B: 0, C: 0, D: 0 })
               }}
@@ -472,6 +480,12 @@ function GameFormFields(props: {
                 const all = (d: VistDecision) => ({ A: d, B: d, C: d, D: d })
                 if (l === 10 && gameLevel !== 10) setGameVistDecisions(all('pass'))
                 else if (l !== 10 && gameLevel === 10 && allPassAuto) setGameVistDecisions(all('vist'))
+                else if (!rules.halfVistLevels.includes(l)) {
+                  // На 8+ полвиста не бывает — оставшееся «Полвиста» становится «Пас»
+                  const next = { ...gameVistDecisions }
+                  for (const v of visters) if (next[v] === 'half') next[v] = 'pass'
+                  setGameVistDecisions(next)
+                }
                 // Взятки играющего = заказ: сыграл ровно, больше — добавить руками.
                 // Раньше оставалось 6 от шестерной, и на семерной это легко было
                 // проглядеть — играющему писался недобор ни за что (18.11.2026).
