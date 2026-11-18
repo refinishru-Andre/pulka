@@ -397,6 +397,21 @@ function GameFormFields(props: {
     gameVisterTricks,
   )
   const allPassAuto = visters.every((v) => gameVistDecisions[v] === 'pass')
+  // «Полвиста» бывает только в ответ на «пас» партнёра: «пас — полвиста».
+  // Сочетания «вист + полвиста» и «полвиста + полвиста» за столом невозможны
+  // и считались неверно (замечание Андрея 18.11.2026). Поэтому: выбрал
+  // «Полвиста» — партнёру «Пас»; выбрал «Вист» при чужом «Полвиста» — тот
+  // сбрасывается на «Пас» (пасовавший «поднял», обычный вист).
+  // Сдающего вчетвером не трогаем — он вступает отдельной кнопкой.
+  const applyVistChoice = (v: PlayerId, d: VistDecision) => {
+    const next = { ...gameVistDecisions, [v]: d }
+    for (const other of visters) {
+      if (other === v || other === dealer) continue
+      if (d === 'half' && next[other] !== 'pass') next[other] = 'pass'
+      if (d === 'vist' && next[other] === 'half') next[other] = 'pass'
+    }
+    return next
+  }
   // Вистуют двое — взятки второго однозначны: всё, что не взял играющий и
   // первый вистующий. Меняешь цифру одному — второму досчитывается остаток
   // (просьба Андрея 18.11.2026). Вчетвером сдающий вступает, только когда оба
@@ -567,7 +582,7 @@ function GameFormFields(props: {
                   return (
                     <button
                       key={d}
-                      onClick={() => !disabled && setGameVistDecisions({ ...gameVistDecisions, [v]: d })}
+                      onClick={() => !disabled && setGameVistDecisions(applyVistChoice(v, d))}
                       disabled={disabled}
                       className={`py-3 sm:py-1.5 rounded-lg text-sm ${
                         effective === d
