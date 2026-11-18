@@ -399,8 +399,8 @@ function GameFormFields(props: {
   const allPassAuto = visters.every((v) => gameVistDecisions[v] === 'pass')
   // Вистуют двое — взятки второго однозначны: всё, что не взял играющий и
   // первый вистующий. Меняешь цифру одному — второму досчитывается остаток
-  // (просьба Андрея 18.11.2026). Втроём (вчетвером вистует и сдающий)
-  // остаток не однозначен — там каждому руками.
+  // (просьба Андрея 18.11.2026). Вчетвером сдающий вступает, только когда оба
+  // вистующих спасовали, — значит, активных вистующих больше двух не бывает.
   const setVisterTricks = (v: PlayerId, n: number) => {
     const value = Math.min(need, Math.max(0, n))
     const next = { ...gameVisterTricks, [v]: value }
@@ -455,6 +455,13 @@ function GameFormFields(props: {
                 const all = (d: VistDecision) => ({ A: d, B: d, C: d, D: d })
                 if (l === 10 && gameLevel !== 10) setGameVistDecisions(all('pass'))
                 else if (l !== 10 && gameLevel === 10 && allPassAuto) setGameVistDecisions(all('vist'))
+                // Взятки играющего = заказ: сыграл ровно, больше — добавить руками.
+                // Раньше оставалось 6 от шестерной, и на семерной это легко было
+                // проглядеть — играющему писался недобор ни за что (18.11.2026).
+                if (l !== gameLevel) {
+                  setGamePlayerTricks(l)
+                  setGameVisterTricks({ A: 0, B: 0, C: 0, D: 0 })
+                }
                 setGameLevel(l)
               }}
               className={`py-3 rounded-lg font-bold text-lg ${
