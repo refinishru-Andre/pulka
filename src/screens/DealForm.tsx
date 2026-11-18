@@ -408,7 +408,10 @@ function GameFormFields(props: {
     const next = { ...gameVistDecisions, [v]: d }
     if (dealerVists && v !== dealer && d !== 'pass') setDealerVists(false)
     for (const other of visters) {
-      if (other === v || other === dealer) continue
+      // Вчетвером сдающий вступает отдельной кнопкой — его не трогаем.
+      // Втроём сдающий — обычный вистующий (ошибка 18.11.2026: исключение
+      // действовало и втроём, и «Полвиста + Вист» снова ставилось).
+      if (other === v || (fourHanded && other === dealer)) continue
       if (d === 'half' && next[other] !== 'pass') next[other] = 'pass'
       if (d === 'vist' && next[other] === 'half') next[other] = 'pass'
     }
