@@ -288,7 +288,7 @@ function calcMisere(deal: Extract<Deal, { type: 'misere' }>, rules: Rules): Deal
 //
 // За 0 взяток — поблажка: минус цена 2 взяток с горы ИЛИ плюс цена 1 взятки в
 // пулю. По деньгам это одно и то же (2 очка горы = 20 вистов = 1 очко пули).
-// Сдающему поблажка может не даваться (ФСПР: «кроме СДАЮЩЕГО»).
+// Вчетвером сдающему поблажка может не даваться (ФСПР: «кроме СДАЮЩЕГО»).
 function calcRaspas(deal: Extract<Deal, { type: 'raspas' }>, seats: Seats, rules: Rules): DealDelta {
   const delta = emptyDelta()
   const cost = ladderAt(rules.raspasCostLadder, deal.level - 1)
@@ -301,7 +301,10 @@ function calcRaspas(deal: Extract<Deal, { type: 'raspas' }>, seats: Seats, rules
     if (billed > 0) delta.mount[p] += billed * cost
 
     if (mine === 0) {
-      const excluded = rules.raspasZeroExcludesDealer && p === deal.dealer
+      // «Кроме сдающего» — только вчетвером, где сдатчик играет на распасе
+      // особо (открывает прикуп, максимум 2 взятки). Втроём сдающий — обычный
+      // игрок при любых правилах (Андрей, 18.11.2026).
+      const excluded = rules.raspasZeroExcludesDealer && seats.length === 4 && p === deal.dealer
       if (!excluded) {
         if (rules.raspasZeroBonus === 'mountMinus2') delta.mount[p] -= 2 * cost
         else if (rules.raspasZeroBonus === 'poolPlus1') delta.pool[p] += cost

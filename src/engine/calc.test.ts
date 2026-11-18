@@ -1451,3 +1451,27 @@ describe('Штраф вистующим считается от недобора
     expect(g.mount.B + g.mount.C).toBe(4)
   })
 })
+
+// Правило «поблажка за 0 на распасе — кроме сдающего» действует только
+// вчетвером. Втроём сдающий — обычный игрок при любых правилах (Андрей, 18.11.2026).
+describe('Распас: поблажка сдающему', () => {
+  const deal: Deal = {
+    type: 'raspas',
+    dealer: 'A',
+    firstHand: 'B',
+    level: 1,
+    tricks: { A: 0, B: 4, C: 6 },
+  }
+  it('втроём сдающий с нулём получает поблажку и по правилам ФСПР', () => {
+    const withBonus = calcDeal(deal, ['A', 'B', 'C'], FSPR_RULES)
+    const noRule = calcDeal(deal, ['A', 'B', 'C'], { ...FSPR_RULES, raspasZeroExcludesDealer: false })
+    expect(withBonus.mount.A).toBe(noRule.mount.A)
+    expect(withBonus.mount.A).toBeLessThan(0)
+  })
+  it('вчетвером сдающему по правилам ФСПР поблажки нет', () => {
+    const d4: Deal = { ...deal, tricks: { A: 0, B: 4, C: 6, D: 0 } }
+    const delta = calcDeal(d4, ['A', 'B', 'C', 'D'], FSPR_RULES)
+    expect(delta.mount.A).toBe(0)
+    expect(delta.mount.D).toBeLessThan(0)
+  })
+})

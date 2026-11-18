@@ -93,7 +93,7 @@ export function dealBreakdown(
       // поблажкой. Раньше о нём говорилось дважды, и первая строка («в гору 0»)
       // только сбивала (замечание Андрея 09.09.2026).
       if (mine === 0) {
-        if (rules.raspasZeroExcludesDealer && p === deal.dealer) {
+        if (rules.raspasZeroExcludesDealer && seats.length === 4 && p === deal.dealer) {
           lines.push(
             `${mark(p)}: взял 0, но поблажка за чистый распас сдающему не полагается — в гору 0.`,
           )
