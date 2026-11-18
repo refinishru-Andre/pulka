@@ -78,7 +78,7 @@ export function DealForm({ minBid, raspasState, onClose, edit }: Props) {
     spread(oldGame?.vistersTricks, 0),
   )
   const [gameVistDecisions, setGameVistDecisions] = useState<Record<PlayerId, VistDecision>>(
-    spread<VistDecision>(oldGame?.vistDecisions, 'vist'),
+    spread<VistDecision>(oldGame?.vistDecisions, initialLevel === 10 ? 'pass' : 'vist'),
   )
 
   const [misPlayer, setMisPlayer] = useState<PlayerId>(oldMisere?.player ?? firstHand)
@@ -435,7 +435,15 @@ function GameFormFields(props: {
           {availableLevels.map((l) => (
             <button
               key={l}
-              onClick={() => setGameLevel(l)}
+              onClick={() => {
+                // На десятерной по умолчанию «пас — пас» (просьба Андрея 18.11.2026):
+                // её обычно не вистуют. Ушли с десятерной, ничего не трогая, —
+                // возвращаем привычное «вист — вист». Ручной выбор не перетираем.
+                const all = (d: VistDecision) => ({ A: d, B: d, C: d, D: d })
+                if (l === 10 && gameLevel !== 10) setGameVistDecisions(all('pass'))
+                else if (l !== 10 && gameLevel === 10 && allPassAuto) setGameVistDecisions(all('vist'))
+                setGameLevel(l)
+              }}
               className={`py-3 rounded-lg font-bold text-lg ${
                 gameLevel === l ? 'bg-yellow-500 text-slate-900' : 'bg-slate-900 border border-slate-700'
               }`}
@@ -886,12 +894,12 @@ function VistHint({
   // проверяется). Страх Андрея 08.10.2026: «вист — вист» стоит по умолчанию,
   // недосмотрел — и обоим гора. Гора им тут не пишется, это и проговариваем.
   // Опасен на самом деле обратный промах — «пас — пас»: тогда игра засчитается
-  // без розыгрыша, даже если играющий сел.
+  // без розыгрыша, даже если играющий сел. С 18.11.2026 «пас — пас» стоит на
+  // десятерной по умолчанию, поэтому подсказка серая, а не жёлтая тревога.
   const noDuty = rules.visterPenaltyPerMiss[level] === 0
   if (noDuty && active.length > 0) {
     text = `${text} На ${level}-м заказе вистующие за недобор не отвечают — в гору не пишут.`.trim()
   } else if (noDuty && !half && active.length === 0) {
-    warn = true
     text = `Все спасовали — игра засчитается без розыгрыша. Если игру проверяли и играющий мог сесть — ставь «Вист».`
   }
   if (!text) return null
