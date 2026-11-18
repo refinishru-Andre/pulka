@@ -170,15 +170,24 @@ export function Table({ onBack }: Props = {}) {
     }
     if (lastDeal.type === 'game' && lastDeal.contract.kind === 'game') {
       const player = game.players[lastDeal.player]
-      lines.push(
-        `${player} играл ${contractLabel(lastDeal.contract)}, взял ${lastDeal.playerTricks}.`,
-      )
       const vs = seats.filter((p) => p !== lastDeal.player && lastDeal.vistDecisions[p] !== undefined)
+      // Никто не вистовал («пас — пас», «пас — полвиста») — игры не было, взяток
+      // никто не брал, писать «взял» нечего. Ушедший за полвиста карт не играет
+      // вовсе — у него взяток нет и при розыгрыше (раньше выводилось «undefined»).
+      const played = vs.some((v) => lastDeal.vistDecisions[v] === 'vist')
+      lines.push(
+        played
+          ? `${player} играл ${contractLabel(lastDeal.contract)}, взял ${lastDeal.playerTricks}.`
+          : `${player} играл ${contractLabel(lastDeal.contract)} — без розыгрыша.`,
+      )
       vs.forEach((v) => {
         const decision = lastDeal.vistDecisions[v]
         const t = lastDeal.vistersTricks[v]
+        const word = decision === 'vist' ? 'вист' : decision === 'pass' ? 'пас' : 'полвиста'
         lines.push(
-          `${game.players[v]}: ${decision === 'vist' ? 'вист' : decision === 'pass' ? 'пас' : 'полвиста'}, взял ${t}`,
+          played && decision !== 'half' && t !== undefined
+            ? `${game.players[v]}: ${word}, взял ${t}`
+            : `${game.players[v]}: ${word}`,
         )
       })
     } else if (lastDeal.type === 'misere') {
