@@ -130,9 +130,20 @@ export function GamesList({ onOpenGame, onNewGame, onOpenStats, onOpenCalc }: Pr
       setSyncOk(!!user)
       await refresh()
     })()
-    // Автообновление каждые 15 сек — на случай если игра идёт на другом устройстве
-    const interval = window.setInterval(() => refresh(true), 15000)
-    return () => window.clearInterval(interval)
+    // Автообновление каждые 15 сек — на случай если игра идёт на другом устройстве.
+    // Только пока вкладку видно: забытая фоновая вкладка сутками опрашивала сервер
+    // раз в минуту (журнал nginx, 7–8.11.2026). Вернулись на вкладку — обновляем сразу.
+    const interval = window.setInterval(() => {
+      if (!document.hidden) refresh(true)
+    }, 15000)
+    const onVisible = () => {
+      if (!document.hidden) refresh(true)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   const handleOpen = (item: CloudGameItem) => {
